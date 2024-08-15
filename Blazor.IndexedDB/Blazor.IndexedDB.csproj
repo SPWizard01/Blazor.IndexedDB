@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="package-lock.json"/>
+    <None Include="package-lock.json" />
     <None Include="package.json" />
     <None Include="tsconfig.json" />
   </ItemGroup>

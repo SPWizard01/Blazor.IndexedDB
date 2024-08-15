@@ -304,15 +304,13 @@ var IndexedDbManager = class {
     const currentDb = this.dbInstance;
     const getStoreNames = (list) => {
       const names = [];
-      for (const element of list) {
-        console.log(element);
-      }
-      for (var i = 0; i < list.length; i++) {
-        names.push(list[i]);
+      for (const storeName of list) {
+        names.push(storeName);
       }
       return names;
     };
     const dbInfo = {
+      name: currentDb.name,
       version: currentDb.version,
       storeNames: getStoreNames(currentDb.objectStoreNames)
     };

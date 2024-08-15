@@ -1,5 +1,5 @@
 ﻿import { IDBPObjectStore, IDBPDatabase, openDB, deleteDB, TypedDOMStringList, StoreNames } from "idb";
-import { IDbStore, IIndexSearch, IStoreRecord, IStoreSchema, IDbInformation } from "./InteropInterfaces";
+import { IDbStore, IIndexSearch, IStoreRecord, IStoreSchema, DBInformation } from "./InteropInterfaces";
 import { DotNet } from "@microsoft/dotnet-js-interop";
 // import { UPGRADE_CHANNEL } from "./utils";
 const RAISE_EVENT_METHOD = "RaiseNotificationFromJS";
@@ -72,15 +72,13 @@ export class IndexedDbManager {
 
         const getStoreNames = (list: TypedDOMStringList<StoreNames<any>>) => {
             const names: string[] = [];
-            for (const element of list) {
-                console.log(element);
-            }
-            for (var i = 0; i < list.length; i++) {
-                names.push(list[i]);
+            for (const storeName of list) {
+                names.push(storeName);
             }
             return names;
         }
-        const dbInfo: IDbInformation = {
+        const dbInfo: DBInformation = {
+            name: currentDb.name,
             version: currentDb.version,
             storeNames: getStoreNames(currentDb.objectStoreNames)
         };

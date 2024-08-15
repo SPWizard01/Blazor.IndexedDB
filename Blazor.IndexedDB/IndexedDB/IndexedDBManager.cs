@@ -1,4 +1,5 @@
 ﻿using Blazor.IndexedDB.Models;
+using Blazor.IndexedDB.Models.JS;
 using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
@@ -69,7 +70,7 @@ namespace Blazor.IndexedDB
         {
             await EnsureDbOpen();
 
-            var result = await CallJavaScript<JavaScriptDBInfo>(IndexedDBJSModuleMethod.GetDbInfo, _dbStore.DbName);
+            var result = await CallJavaScript<DBInformation>(IndexedDBJSModuleMethod.GetDbInfo, _dbStore.DbName);
 
             if (result.Version > _dbStore.Version)
             {

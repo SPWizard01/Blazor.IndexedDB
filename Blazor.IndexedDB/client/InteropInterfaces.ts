@@ -39,7 +39,8 @@ export interface IIndexSpec {
     auto: boolean;
 }
 
-export interface IDbInformation {
+export interface DBInformation {
+    name: string;
     version: number;
     storeNames: string[];
 }

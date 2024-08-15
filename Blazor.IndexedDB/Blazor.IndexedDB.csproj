@@ -1,0 +1,58 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RazorLangVersion>8.0</RazorLangVersion>
+    <TypeScriptCompileBlocked>true</TypeScriptCompileBlocked>
+    <TypeScriptToolsVersion>Latest</TypeScriptToolsVersion>
+    <DefaultItemExcludes>${DefaultItemExcludes};dist\**;node_modules\**</DefaultItemExcludes>
+    <AssemblyName>Blazor.IndexedDB</AssemblyName>
+    <RootNamespace>Blazor.IndexedDB</RootNamespace>
+    <Version>2.0.0</Version>
+    <Authors>SPWizard01</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/SPWizard01/Blazor.IndexedDB</RepositoryUrl>
+    <RepositoryType>GIT</RepositoryType>
+    <Description>A Blazor library for interacting with IndexedDB</Description>
+    <Copyright>Copyright 2024 SPWizard01</Copyright>
+    <PackageReleaseNotes>Initial release</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="package-lock.json" />
+    <Content Remove="package.json" />
+    <Content Remove="tsconfig.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClientLibInputs Include="client\**\*.ts" />
+    <PackageJSONInputs Include="package.json; package-lock.json" />
+    <NodeModuleInputs Include="node_modules\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="package-lock.json"/>
+    <None Include="package.json" />
+    <None Include="tsconfig.json" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.0" />
+  </ItemGroup>
+
+
+  <Target Name="EnsureNpmRestored" Inputs="@(ClientLibInputs)" Outputs="@(PackageJSONInputs)">
+    <Message Importance="high" Text="Restoring dependencies using 'npm'. This may take several minutes..." />
+    <Exec Command="npm install" />
+  </Target>
+  <!--Inputs="@(ClientLibInputs)" Outputs="wwwroot\client.js" -->
+  <Target Name="RunTSBuild" BeforeTargets="CoreCompile" AfterTargets="EnsureNpmRestored">
+    <Message Importance="high" Text="Building client lib..." />
+    <Exec Command="npx esbuild --bundle --format=esm ./client/app.ts --outfile=./wwwroot/client.js --sourcemap" Condition="$(Configuration)==Debug" />
+    <Exec Command="npx esbuild --bundle --format=esm ./client/app.ts --outfile=./wwwroot/client.js --sourcemap --minify" Condition="$(Configuration)==Release" />
+  </Target>
+ 
+
+</Project>

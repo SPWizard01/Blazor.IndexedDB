@@ -1,0 +1,26 @@
+{
+  "name": "indexeddbblazor.js",
+  "version": "1.0.0",
+  "description": "",
+  "main": "client/app.ts",
+  "scripts": {
+    "build:debug": "tsx esbuild.ts Debug",
+    "build:production": "tsx esbuild.ts Release",
+    "bun": "bun run bunbuild.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@microsoft/dotnet-js-interop": "^8.0.0",
+    "@types/bun": "^1.1.6",
+    "@types/node": "^22.3.0",
+    "bun": "^1.1.24",
+    "esbuild": "^0.23.0",
+    "tsx": "^4.17.0",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "idb": "^8.0.0"
+  }
+}

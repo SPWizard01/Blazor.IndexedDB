@@ -9,23 +9,19 @@ builder.Services.AddRazorComponents()
 builder.Services.AddIndexedDB(dbStore =>
 {
     dbStore.DbName = "TheFactory";
-    dbStore.Version = 1;
+    dbStore.Version = 9;
 
     dbStore.Stores.Add(new StoreSchema
     {
         Name = "Employees",
         PrimaryKey = new IndexSpec { Name = "id", KeyPath = "id", Auto = true },
-        Indexes = new List<IndexSpec>
-                    {
-                        new IndexSpec{Name="firstName", KeyPath = "firstName", Auto=false},
-                        new IndexSpec{Name="lastName", KeyPath = "lastName", Auto=false}
+        Indexes = [
+                        new IndexSpec{Name="IndexFirstName", KeyPath = "firstName", Auto=false},
+                        new IndexSpec{Name="IndexLastName", KeyPath = "lastName", Auto=false},
+                        new IndexSpec{Name="IndexSSN", KeyPath = "ssn", Auto=false},
+                        new IndexSpec{Name="bla", KeyPath = "bla", Auto=false},
 
-                    }
-    });
-    dbStore.Stores.Add(new StoreSchema
-    {
-        Name = "Outbox",
-        PrimaryKey = new IndexSpec { Auto = true }
+                    ]
     });
 });
 var app = builder.Build();

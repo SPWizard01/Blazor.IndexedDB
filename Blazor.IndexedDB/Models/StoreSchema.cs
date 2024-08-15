@@ -7,7 +7,6 @@ namespace Blazor.IndexedDB.Models
     /// </summary>
     public class StoreSchema
     {
-        public int? DbVersion { get; set; }
         /// <summary>
         /// The name for the store
         /// </summary>

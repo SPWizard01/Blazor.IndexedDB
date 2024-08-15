@@ -43,12 +43,17 @@
   </ItemGroup>
 
 
+  <ItemGroup>
+    <Folder Include="client\" />
+  </ItemGroup>
+
+
   <Target Name="EnsureNpmRestored" Inputs="@(ClientLibInputs)" Outputs="@(PackageJSONInputs)">
     <Message Importance="high" Text="Restoring dependencies using 'npm'. This may take several minutes..." />
     <Exec Command="npm install" />
   </Target>
   <!--Inputs="@(ClientLibInputs)" Outputs="wwwroot\client.js" -->
-  <Target Name="RunTSBuild" BeforeTargets="CoreCompile" AfterTargets="EnsureNpmRestored">
+  <Target Name="RunTSBuild" BeforeTargets="Build" AfterTargets="EnsureNpmRestored">
     <Message Importance="high" Text="Building client lib..." />
     <Exec Command="npx esbuild --bundle --format=esm ./client/app.ts --outfile=./wwwroot/client.js --sourcemap" Condition="$(Configuration)==Debug" />
     <Exec Command="npx esbuild --bundle --format=esm ./client/app.ts --outfile=./wwwroot/client.js --sourcemap --minify" Condition="$(Configuration)==Release" />

@@ -11,7 +11,6 @@ export interface IDbStore {
 
 /**Defines a store to be created in the database. */
 export interface IStoreSchema {
-    dbVersion?: number;
     name: string;
     primaryKey: IIndexSpec;
     indexes: IIndexSpec[];

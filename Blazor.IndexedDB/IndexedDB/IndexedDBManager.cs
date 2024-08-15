@@ -11,13 +11,14 @@ namespace Blazor.IndexedDB
     /// <summary>
     /// Provides functionality for accessing IndexedDB from Blazor application
     /// </summary>
-    public class IndexedDBManager : IDisposable
+    public class IndexedDBManager
     {
         private readonly DbStore _dbStore;
         private readonly IJSRuntime _jsRuntime;
+        private readonly DotNetObjectReference<IndexedDBManager> _dbManagerRef;
         private bool _isOpen;
         private IJSObjectReference _jsModule;
-        private DotNetObjectReference<IndexedDBManager> _dbManagerRef;
+        private bool disposedValue;
 
         /// <summary>
         /// A notification event that is raised when an action is completed
@@ -82,7 +83,7 @@ namespace Blazor.IndexedDB
                 {
                     if (!currentStores.Contains(storeName))
                     {
-                        _dbStore.Stores.Add(new StoreSchema { DbVersion = result.Version, Name = storeName });
+                        _dbStore.Stores.Add(new StoreSchema { Name = storeName });
 
                     }
                 }
@@ -121,18 +122,10 @@ namespace Blazor.IndexedDB
         /// <typeparam name="T"></typeparam>
         /// <param name="recordToAdd">An instance of StoreRecord that provides the store name and the data to add</param>
         /// <returns></returns>
-        public async Task AddRecord<T>(StoreRecord<T> recordToAdd)
+        public async Task<RecordActionResult<T>> AddRecord<T>(StoreRecord<T> recordToAdd)
         {
             await EnsureDbOpen();
-            try
-            {
-                var result = await CallJavaScript<StoreRecord<T>, string>(IndexedDBJSModuleMethod.AddRecord, recordToAdd);
-                RaiseNotification(IndexDBActionOutcome.RecordInserted, result);
-            }
-            catch (JSException e)
-            {
-                RaiseNotification(IndexDBActionOutcome.Failure, e.Message);
-            }
+            return await CallJavaScript<StoreRecord<T>, RecordActionResult<T>>(IndexedDBJSModuleMethod.AddRecord, recordToAdd);
         }
 
         /// <summary>
@@ -141,18 +134,11 @@ namespace Blazor.IndexedDB
         /// <typeparam name="T"></typeparam>
         /// <param name="recordToUpdate">An instance of StoreRecord with the store name and the record to update</param>
         /// <returns></returns>
-        public async Task UpdateRecord<T>(StoreRecord<T> recordToUpdate)
+        public async Task<RecordActionResult<T>> UpdateRecord<T>(StoreRecord<T> recordToUpdate)
         {
             await EnsureDbOpen();
-            try
-            {
-                var result = await CallJavaScript<StoreRecord<T>, string>(IndexedDBJSModuleMethod.UpdateRecord, recordToUpdate);
-                RaiseNotification(IndexDBActionOutcome.Success, result);
-            }
-            catch (JSException jse)
-            {
-                RaiseNotification(IndexDBActionOutcome.Failure, jse.Message);
-            }
+            return await CallJavaScript<StoreRecord<T>, RecordActionResult<T>>(IndexedDBJSModuleMethod.UpdateRecord, recordToUpdate);
+
         }
 
         /// <summary>
@@ -320,11 +306,7 @@ namespace Blazor.IndexedDB
             _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", $"./_content/{assemblyName}/client.js");
             await _jsModule.InvokeVoidAsync($"{IndexedDBJSModuleMethod.InitIndexedDBManager}", _dbManagerRef);
         }
-        public async Task DoSomeBla()
-        {
-            await EnsureModule();
-            await _jsModule.InvokeVoidAsync("doSomeBla");
-        }
+
         private async Task<TResult> CallJavaScript<TData, TResult>(IndexedDBJSModuleMethod functionName, TData data)
         {
             await EnsureModule();
@@ -335,6 +317,17 @@ namespace Blazor.IndexedDB
         {
             await EnsureModule();
             return await _jsModule.InvokeAsync<TResult>($"IDBManager.{functionName}", args);
+        }
+        private async Task CallJavaScriptVoid<TData>(IndexedDBJSModuleMethod functionName, TData data)
+        {
+            await EnsureModule();
+            await _jsModule.InvokeVoidAsync($"IDBManager.{functionName}", data);
+        }
+
+        private async Task CallJavaScriptVoid(IndexedDBJSModuleMethod functionName, params object[] args)
+        {
+            await EnsureModule();
+            await _jsModule.InvokeVoidAsync($"IDBManager.{functionName}", args);
         }
 
         private async Task EnsureDbOpen()
@@ -351,11 +344,6 @@ namespace Blazor.IndexedDB
         public void RaiseNotificationFromJS(string outcome, string message)
         {
             ActionCompleted?.Invoke(this, new IndexedDBNotificationEvent { Outcome = Enum.Parse<IndexDBActionOutcome>(outcome), Message = message });
-        }
-
-        public void Dispose()
-        {
-            _dbManagerRef?.Dispose();
         }
     }
 }

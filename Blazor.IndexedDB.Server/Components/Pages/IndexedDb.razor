@@ -157,12 +157,17 @@
         }
         else
         {
-            await DbManager.AddRecord(newRecord);
+            
+            var result = await DbManager.AddRecord(newRecord);
+            if(result is not null)
+                People.Add(result.Data);
         }
+
+
 
         CurrentPerson = new Person();
 
-        GetRecords();
+        // GetRecords();
     }
 
     protected async Task DeleteRecord(long? id)

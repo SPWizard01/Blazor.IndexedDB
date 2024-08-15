@@ -25,8 +25,14 @@ namespace Blazor.IndexedDB
         TableRemoved,
         TableUpdated,
         TableDeleted,
-        RecordInserted,
+
+        IndexCreated,
+
+        RecordAdded,
+        RecordAddFailure,
         RecordUpdated,
+        RecordUpdateFailure,
         RecordDeleted,
+        RecordDeleteFailure,
     }
 }

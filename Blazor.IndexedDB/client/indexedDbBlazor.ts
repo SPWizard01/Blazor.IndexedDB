@@ -1,6 +1,8 @@
-﻿import { IDBPObjectStore, IDBPDatabase, openDB, deleteDB, TypedDOMStringList, StoreNames } from "idb";
+﻿import { IDBPObjectStore, IDBPDatabase, openDB, deleteDB, TypedDOMStringList, StoreNames, IDBPTransaction } from "idb";
 import { IDbStore, IIndexSearch, IStoreRecord, IStoreSchema, DBInformation } from "./InteropInterfaces";
 import { DotNet } from "@microsoft/dotnet-js-interop";
+import { RecordActionResult } from "./models/recordActionResult";
+import { UpgradeOutcome } from "./models/upgradeOutcome";
 // import { UPGRADE_CHANNEL } from "./utils";
 const RAISE_EVENT_METHOD = "RaiseNotificationFromJS";
 export class IndexedDbManager {
@@ -30,8 +32,13 @@ export class IndexedDbManager {
                     this.dbInstance.close();
                 }
                 this.dbInstance = await openDB(dbStore.dbName, dbStore.version, {
-                    upgrade: async (database, oldVersion, newVersion) => {
-                        await this.upgradeDatabase(database, dbStore, oldVersion, newVersion!);
+                    upgrade: async (database, oldVersion, newVersion, transaction) => {
+                        
+                        const outcomes = this.upgradeDatabase(database, dbStore, oldVersion, newVersion!, transaction);
+                        for (const element of outcomes) {
+                            await this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, element.type, element.message);
+                        }
+
                     },
                     blocked: async (currentVersion, blockedVersion, event) => {
                         const msg = `Database upgrade blocked. Current version: ${currentVersion}, Blocked version: ${blockedVersion}`;
@@ -63,6 +70,14 @@ export class IndexedDbManager {
         return msg;
     }
 
+    private getStoreNames(list: TypedDOMStringList<StoreNames<any>>) {
+        const names: string[] = [];
+        for (const storeName of list) {
+            names.push(storeName);
+        }
+        return names;
+    }
+
     public async getDbInfo(dbName: string) {
         if (!this.dbInstance) {
             this.dbInstance = await openDB(dbName);
@@ -70,17 +85,10 @@ export class IndexedDbManager {
 
         const currentDb = <IDBPDatabase>this.dbInstance;
 
-        const getStoreNames = (list: TypedDOMStringList<StoreNames<any>>) => {
-            const names: string[] = [];
-            for (const storeName of list) {
-                names.push(storeName);
-            }
-            return names;
-        }
         const dbInfo: DBInformation = {
             name: currentDb.name,
             version: currentDb.version,
-            storeNames: getStoreNames(currentDb.objectStoreNames)
+            storeNames: this.getStoreNames(currentDb.objectStoreNames)
         };
 
         return dbInfo;
@@ -104,21 +112,96 @@ export class IndexedDbManager {
         const tx = this.getTransaction(stName, "readwrite");
         const objectStore = tx.objectStore(stName);
 
-        itemToSave = this.checkForKeyPath(objectStore, itemToSave);
+        itemToSave = this.removeKeyProperty(objectStore, itemToSave);
 
-        const result = await objectStore.add?.(itemToSave, record.key);
-        await tx.done;
-        return `Added new record with id ${result}`;
+        try {
+            if (!objectStore.add) {
+                throw new Error("Add method not available on object store");
+            }
+            const result = await objectStore.add(itemToSave);
+            const dbResult = await objectStore.get(result!);
+            await tx.done;
+            const msg = `Added new record with id ${result}`;
+            await this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, "RecordAdded", msg);
+            const addResult: RecordActionResult = {
+                storeName: record.storeName,
+                key: result as any,
+                data: dbResult
+            }
+            return addResult;
+        }
+        catch (e) {
+            const msg = `Error adding record: ${e}`;
+            await this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, "RecordAddFailure", msg);
+            throw msg;
+        }
+
     }
 
-    public updateRecord = async (record: IStoreRecord): Promise<string> => {
+    public async updateRecord(record: IStoreRecord) {
         const stName = record.storeName;
         const tx = this.getTransaction(stName, "readwrite");
+        const objectStore = tx.objectStore(stName);
+        try {
+            if (!objectStore.put) {
+                throw new Error("Put method not available on object store");
+            }
+            const result = await objectStore.put(record.data, record.key);
+            const dbResult = await objectStore.get(result);
+            await tx.done;
+            const addResult: RecordActionResult = {
+                storeName: record.storeName,
+                key: result as any,
+                data: dbResult
+            }
+            const msg = `Updated record with id ${result}`;
+            await this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, "RecordUpdated", msg);
 
-        const result = await tx.objectStore(stName).put?.(record.data, record.key);
-
-        return `updated record with id ${result}`;
+            return addResult;
+        }
+        catch (e) {
+            const msg = `Error updating record: ${e}`;
+            await this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, "RecordUpdateFailure", msg);
+            throw msg;
+        }
     }
+
+    public async deleteRecord(record: IStoreRecord) {
+        if (!record.key) {
+            throw new Error("Record key is required to delete a record");
+        }
+        const stName = record.storeName;
+        const tx = this.getTransaction(stName, "readwrite");
+        const objectStore = tx.objectStore(stName);
+        debugger;
+        try {
+            if (!objectStore.delete) {
+                throw new Error("delete method not available on object store");
+            }
+            await objectStore.delete(record.key);
+            await tx.done;
+            return await this.notifyRecordDeleted(record.key, stName);
+        }
+        catch (e) {
+            await this.notifyDeleteFailure(e);
+        }
+    }
+
+    public async deleteRecordByKey(storename: string, id: any) {
+        const tx = this.getTransaction(storename, "readwrite");
+        const objectStore = tx.objectStore(storename);
+        try {
+            if (!objectStore.delete) {
+                throw new Error("delete method not available on object store");
+            }
+            await objectStore.delete(id);
+            return await this.notifyRecordDeleted(id, storename);
+        }
+        catch (e) {
+            await this.notifyDeleteFailure(e);
+        }
+    }
+
 
     public getRecords = async (storeName: string): Promise<any> => {
         const tx = this.getTransaction(storeName, "readonly");
@@ -129,6 +212,8 @@ export class IndexedDbManager {
 
         return results;
     }
+
+
 
     public clearStore = async (storeName: string): Promise<string> => {
 
@@ -176,58 +261,65 @@ export class IndexedDbManager {
         return result;
     }
 
-    public deleteRecord = async (storename: string, id: any): Promise<string> => {
-        const tx = this.getTransaction(storename, "readwrite");
-        await tx.objectStore(storename).delete?.(id);
 
-        return `Record with id: ${id} deleted`;
+    private async notifyDeleteFailure(e: unknown) {
+        const msg = `Error deleting record: ${e}`;
+        await this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, "RecordDeleteFailure", msg);
+        throw msg;
     }
 
     private getTransaction(stName: string, mode?: IDBTransactionMode) {
         const tx = this.dbInstance!.transaction(stName, mode);
-        tx.done.catch(
-            err => {
-                if (err) {
-                    console.error((err as Error).message);
-                } else {
-                    console.error("Undefined error in getTransaction()");
-                }
+        //tx.done.catch(
+        //    err => {
+        //        if (err) {
+        //            console.error((err as Error).message);
+        //        } else {
+        //            console.error("Undefined error in getTransaction()");
+        //        }
 
-            });
+        //    });
 
         return tx;
     }
 
-    // Currently don"t support aggregate keys
-    private checkForKeyPath(objectStore: IDBPObjectStore<unknown, [string], string, "readonly" | "readwrite" | "versionchange">, data: any) {
+    private removeKeyProperty(objectStore: IDBPObjectStore<unknown, [string], string, "readonly" | "readwrite" | "versionchange">, data: any) {
         if (!objectStore.autoIncrement || !objectStore.keyPath) {
             return data;
         }
 
-        if (typeof objectStore.keyPath !== "string") {
-            return data;
-        }
-
-        const keyPath = objectStore.keyPath as string;
-
-        if (!data[keyPath]) {
-            delete data[keyPath];
+        if (!Array.isArray(objectStore.keyPath)) {
+            if (data[objectStore.keyPath]) {
+                delete data[objectStore.keyPath];
+            }
         }
         return data;
     }
 
-    private async upgradeDatabase(upgradeDB: IDBPDatabase, dbStore: IDbStore, oldVersion: number, newVersion: number) {
+    private upgradeDatabase(upgradeDB: IDBPDatabase, dbStore: IDbStore, oldVersion: number, newVersion: number, transaction: IDBPTransaction<any, StoreNames<any>[], "versionchange">) {
+        const outcomes: UpgradeOutcome[] = [];
         if (oldVersion < newVersion) {
             if (dbStore.stores) {
                 for (var store of dbStore.stores) {
                     if (!upgradeDB.objectStoreNames.contains(store.name)) {
                         this.addNewStore(upgradeDB, store);
-                        const msg = `Store ${store.name} created inside ${upgradeDB.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`;
-                        await this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, "TableCreated", msg)
+                        const message = `Store ${store.name} created inside ${upgradeDB.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`;
+                        outcomes.push({ type: "TableCreated", message });
+                        continue;
+                    }
+                    const table = transaction.objectStore(store.name);
+                    for (const indexSpec of store.indexes) {
+                        if (table.indexNames.contains(indexSpec.name)) {
+                            continue;
+                        }
+                        table.createIndex(indexSpec.name, indexSpec.keyPath, { unique: indexSpec.unique });
+                        const message = `Index ${indexSpec.name} created inside ${store.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`;
+                        outcomes.push({ type: "IndexCreated", message });
                     }
                 }
             }
         }
+        return outcomes;
     }
 
     private async verifySchema(upgradeDB: IDBPDatabase, dbStore: IDbStore) {
@@ -257,10 +349,18 @@ export class IndexedDbManager {
             primaryKey = { name: "id", keyPath: "id", auto: true };
         }
 
-        const newStore = upgradeDB.createObjectStore(store.name, { keyPath: primaryKey.keyPath, autoIncrement: primaryKey.auto });
+        const newStore = upgradeDB.createObjectStore(store.name, { keyPath: primaryKey.keyPath, autoIncrement: primaryKey.auto, });
 
         for (var index of store.indexes) {
             newStore.createIndex(index.name, index.keyPath, { unique: index.unique });
         }
+    }
+
+
+
+    private async notifyRecordDeleted(key: any, storeName: string) {
+        const msg = `Deleted record with id ${key} from store ${storeName}`;
+        await this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, "RecordDeleted", msg);
+        return msg;
     }
 }

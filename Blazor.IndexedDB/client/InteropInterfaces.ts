@@ -33,8 +33,10 @@ export interface IIndexSearch {
 /**Index definition for a store */
 export interface IIndexSpec {
     name: string;
-    keyPath: string;
-    unique?: boolean;
+    keyPath: string[];
+    keepAsArrayOnSingleValue: boolean;
+    unique: boolean;
+    multiEntry: boolean;
     auto: boolean;
 }
 

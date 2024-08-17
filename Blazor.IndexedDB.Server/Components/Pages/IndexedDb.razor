@@ -66,8 +66,8 @@
                 <p>First Name: @person.FirstName</p>
                 <p>Last Name: @person.LastName</p>
                 <div>
-                    <button class="btn btn-outline-primary" @onclick="(() => EditPerson(person.Id.Value))">Edit</button>
-                    <button class="btn btn-outline-warning" @onclick="(() => DeleteRecord(person.Id.Value))">Delete</button>
+                    <button class="btn btn-outline-primary" @onclick="(() => EditPerson(person.Id))">Edit</button>
+                    <button class="btn btn-outline-warning" @onclick="(() => DeleteRecord(person.Id))">Delete</button>
                 </div>
             </div>
 
@@ -115,9 +115,9 @@
     {
         var results = await DbManager.GetRecords<Person>(DbManager.Stores[0].Name);
 
-        if (results != null && results.Any())
+        if (results != null && results.Data != null && results.Data.Any())
         {
-            People = results;
+            People = results.Data.ToList();
         }
         else
         {
@@ -128,12 +128,18 @@
         StateHasChanged();
     }
 
-    protected async Task EditPerson(long id)
+    protected async Task EditPerson(long? id)
     {
         try
         {
-            CurrentPerson = await DbManager.GetRecordById<long, Person>
-                (DbManager.Stores[0].Name, id);
+            if (id is null)
+            {
+                return;
+            }
+            var resultById = await DbManager.GetRecordById<long, Person>
+               (DbManager.Stores[0].Name, id.Value);
+            if (resultById is not null && resultById.Data is not null)
+                CurrentPerson = resultById.Data;
         }
         catch (Exception e)
         {
@@ -157,9 +163,9 @@
         }
         else
         {
-            
+
             var result = await DbManager.AddRecord(newRecord);
-            if(result is not null)
+            if (result is not null && result.Data != null)
                 People.Add(result.Data);
         }
 
@@ -182,7 +188,7 @@
         var newStoreSchema = new StoreSchema
             {
                 Name = NewStoreName,
-                PrimaryKey = new IndexSpec { Name = "id", KeyPath = "id", Auto = true },
+                PrimaryKey = new IndexSpec { Name = "id", KeyPath = ["id"], Auto = true },
             };
 
         await DbManager.AddNewStore(newStoreSchema);
@@ -230,18 +236,18 @@
             {
                 return;
             }
-            People.AddRange(result);
+            People.AddRange(result.Data ?? []);
 
         }
         else
         {
             var result = await DbManager.GetRecordByIndex<string, Person>(indexSearch);
 
-            if (result is null)
+            if (result is null || result.Data is null)
             {
                 return;
             }
-            People.Add(result);
+            People.Add(result.Data);
         }
     }
 }

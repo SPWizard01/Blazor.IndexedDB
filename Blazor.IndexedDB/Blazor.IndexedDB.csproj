@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <RazorLangVersion>8.0</RazorLangVersion>
+    <Nullable>enable</Nullable>
     <TypeScriptCompileBlocked>true</TypeScriptCompileBlocked>
     <TypeScriptToolsVersion>Latest</TypeScriptToolsVersion>
     <DefaultItemExcludes>${DefaultItemExcludes};dist\**;node_modules\**</DefaultItemExcludes>
     <AssemblyName>Blazor.IndexedDB</AssemblyName>
     <RootNamespace>Blazor.IndexedDB</RootNamespace>
-    <Version>2.0.0</Version>
+    <Version>0.0.1</Version>
     <Authors>SPWizard01</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/SPWizard01/Blazor.IndexedDB</RepositoryUrl>
@@ -38,8 +38,8 @@
 
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components" Version="8.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components" Version="8.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.8" />
   </ItemGroup>
 
 

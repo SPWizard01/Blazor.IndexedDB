@@ -28,9 +28,16 @@
         /// defines whether the key value must be unique
         /// </summary>
         public bool Unique { get; set; }
+
         /// <summary>
-        /// determines whether the index value should be generate by IndexDB.
-        /// Only use if you are defining a primary key such as "id"
+        /// Determines whether the index value should be generate by IndexDB.
+        /// Only use if you are defining a primary <see cref="IndexSpec.KeyPath"/> such as "id"
+        /// <para>
+        /// Will throw an error if set to true and the <see cref="IndexSpec.KeyPath"/> is an array with more than one item.
+        /// </para>
+        /// <para>
+        /// Has no effect when specified in <see cref="StoreSchema.Indexes"/>.
+        /// </para>
         /// </summary>
         public bool Auto { get; set; }
     }

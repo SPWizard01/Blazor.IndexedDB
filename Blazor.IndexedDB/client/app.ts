@@ -1,5 +1,5 @@
 ﻿import { IndexedDbManager } from './indexedDbBlazor';
-import { DotNet } from "@microsoft/dotnet-js-interop";
+import { type DotNet } from "@microsoft/dotnet-js-interop";
 
 export let IDBManager: IndexedDbManager | undefined;
 let _dbManagerRef: DotNet.DotNetObject | undefined;

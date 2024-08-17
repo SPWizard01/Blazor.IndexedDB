@@ -347,10 +347,11 @@ var IndexedDbManager = class {
     try {
       const tx = this.getTransaction(stName, "readwrite");
       const objectStore = tx.objectStore(stName);
-      itemToSave = this.removeKeyPropertyIfAutoIncrement(objectStore, itemToSave);
+      itemToSave = this.removePrimaryKeyPropertyIfAutoIncrement(objectStore, itemToSave);
       if (!objectStore.add) {
         return this.getFailureResult("Add method not available on object store");
       }
+      console.log(itemToSave);
       const result = await objectStore.add(itemToSave);
       const dbResult = await objectStore.get(result);
       await tx.done;
@@ -408,16 +409,6 @@ var IndexedDbManager = class {
       return this.getFailureResult(`Error deleting record: ${e}`);
     }
   }
-  async getRecords(storeName) {
-    try {
-      const tx = this.getTransaction(storeName, "readonly");
-      const results = await tx.objectStore(storeName).getAll();
-      await tx.done;
-      return this.getSuccessResult(`Records retrieved from ${storeName}`, results);
-    } catch (e) {
-      return this.getFailureResult(`Error getting records from ${storeName}: ${e}`);
-    }
-  }
   async clearStore(storeName) {
     try {
       const tx = this.getTransaction(storeName, "readwrite");
@@ -428,39 +419,219 @@ var IndexedDbManager = class {
       return this.getFailureResult(`Error clearing store ${storeName}: ${e}`);
     }
   }
-  getRecordByIndex = async (searchData) => {
-    const tx = this.getTransaction(searchData.storeName, "readonly");
-    const objectStore = tx.objectStore(searchData.storeName);
-    const index = objectStore.index(searchData.indexName);
-    const results = await index.get(searchData.queryValue);
-    await tx.done;
-    return results;
-  };
-  getAllRecordsByIndex = async (searchData) => {
-    const tx = this.getTransaction(searchData.storeName, "readonly");
-    const results = [];
-    const recordIterator = tx.objectStore(searchData.storeName).index(searchData.indexName).iterate(searchData.queryValue, "next");
-    for await (const cursor of recordIterator) {
-      results.push(cursor.value);
+  //#region IndexQueries
+  async iterateRecordsByIndex(searchData, direction) {
+    try {
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = [];
+      const recordIterator = index.iterate(idbKeyResult.data.value, direction);
+      for await (const cursor of recordIterator) {
+        results.push(cursor.value);
+      }
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
     }
-    await tx.done;
-    return results;
-  };
-  getRecordById = async (storename, id) => {
-    const tx = this.getTransaction(storename, "readonly");
-    let result = await tx.objectStore(storename).get(id);
-    return result;
-  };
+  }
+  async getRecordByIndex(searchData) {
+    try {
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await index.get(idbKeyResult.data.value);
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
+    }
+  }
+  async getAllRecordsByIndexQuery(searchData, count) {
+    try {
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await index.getAll(idbKeyResult.data.value, count);
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
+    }
+  }
+  async getAllRecordsByIndex(searchData) {
+    try {
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await index.getAll();
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
+    }
+  }
+  async getAllKeysByIndex(searchData, count) {
+    try {
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await index.getAllKeys(idbKeyResult.data.value, count);
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
+    }
+  }
+  async getKeyByIndex(searchData) {
+    try {
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await index.getKey(idbKeyResult.data.value);
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
+    }
+  }
+  //#endregion
+  //#region StoreRecordQueries
+  async iterateRecords(searchData, direction) {
+    try {
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = [];
+      const recordIterator = objectStore.iterate(idbKeyResult.data.value, direction);
+      for await (const cursor of recordIterator) {
+        results.push(cursor.value);
+      }
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
+    }
+  }
+  async getRecord(searchData) {
+    try {
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await objectStore.get(idbKeyResult.data.value);
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from table ${searchData.storeName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records table ${searchData.storeName}: ${e}`);
+    }
+  }
+  async getAllRecords(searchData) {
+    try {
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await objectStore.getAll();
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
+    }
+  }
+  async getAllRecordsByQuery(searchData, count) {
+    try {
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await objectStore.getAll(idbKeyResult.data.value, count);
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
+    }
+  }
+  async getAllKeys(searchData, count) {
+    try {
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await objectStore.getAllKeys(idbKeyResult.data.value, count);
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
+    }
+  }
+  async getKey(searchData) {
+    try {
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = await objectStore.getKey(idbKeyResult.data.value);
+      await tx.done;
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
+    }
+  }
+  //#endregion
+  getIDBKey(query) {
+    let result;
+    console.log(query);
+    switch (query.queryType) {
+      case "BoundQuery":
+        result = { type: "KeyRange", value: IDBKeyRange.bound(query.lowerBound, query.upperBound, query.lowerOpen, query.upperOpen) };
+        break;
+      case "LowerBoundQuery":
+        result = { type: "KeyRange", value: IDBKeyRange.lowerBound(query.lowerBound, query.lowerOpen) };
+        break;
+      case "UpperBoundQuery":
+        result = { type: "KeyRange", value: IDBKeyRange.upperBound(query.upperBound, query.upperOpen) };
+        break;
+      case "OnlyQuery":
+        result = { type: "KeyRange", value: IDBKeyRange.only(query.value) };
+        break;
+      case "ValidKeyQuery":
+        result = { type: "ValidKey", value: query.value };
+        break;
+      default:
+        return this.getFailureResult(`Invalid query type ${query.queryType}`);
+    }
+    return this.getSuccessResult("IDBKey created", result);
+  }
+  getIndexQuery(searchData, transactionMode) {
+    const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, transactionMode);
+    const index = objectStore.index(searchData.indexName);
+    return { index, tx, idbKeyResult };
+  }
+  getStoreQuery(searchData, transactionMode) {
+    const tx = this.getTransaction(searchData.storeName, transactionMode);
+    const objectStore = tx.objectStore(searchData.storeName);
+    const idbKeyResult = this.getIDBKey(searchData.queryValue);
+    return { objectStore, tx, idbKeyResult };
+  }
   getTransaction(stName, mode) {
     const tx = this.dbInstance.transaction(stName, mode);
     return tx;
   }
-  removeKeyPropertyIfAutoIncrement(objectStore, data) {
+  removePrimaryKeyPropertyIfAutoIncrement(objectStore, data) {
     if (!objectStore.autoIncrement || !objectStore.keyPath) {
       return data;
     }
     if (!Array.isArray(objectStore.keyPath)) {
-      if (data[objectStore.keyPath]) {
+      if (Object.hasOwn(data, objectStore.keyPath)) {
         delete data[objectStore.keyPath];
       }
     }
@@ -531,10 +702,15 @@ var IndexedDbManager = class {
     if (!primaryKey) {
       primaryKey = { name: "id", keyPath: ["id"], auto: true, multiEntry: false, unique: true, keepAsArrayOnSingleValue: false };
     }
-    const newStore = upgradeDB.createObjectStore(store.name, { keyPath: primaryKey.keyPath[0], autoIncrement: primaryKey.auto });
-    storeOutcomes.push(this.getSuccessResult(`Store ${store.name} created inside ${upgradeDB.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`, void 0, "TableCreated"));
-    for (var index of store.indexes) {
-      storeOutcomes.push(this.createIndexForStore(index, newStore, oldVersion, newVersion));
+    const primaryKeyPath = primaryKey.keyPath.length == 1 ? primaryKey.keyPath[0] : primaryKey.keyPath;
+    try {
+      const newStore = upgradeDB.createObjectStore(store.name, { keyPath: primaryKeyPath, autoIncrement: primaryKey.auto });
+      storeOutcomes.push(this.getSuccessResult(`Store ${store.name} created inside ${upgradeDB.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`, void 0, "TableCreated"));
+      for (var index of store.indexes) {
+        storeOutcomes.push(this.createIndexForStore(index, newStore, oldVersion, newVersion));
+      }
+    } catch (e) {
+      storeOutcomes.push(this.getFailureResult(`Error creating store ${store.name}: ${e}`, "StoreCreationError"));
     }
     return storeOutcomes;
   }

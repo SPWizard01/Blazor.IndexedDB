@@ -1,5 +1,6 @@
 ﻿@page "/indexed-db"
 
+@using Blazor.IndexedDB.Models.Query
 @using Blazor.IndexedDB.Server.Models
 @using Blazor.IndexedDB.Models
 @implements IDisposable
@@ -77,14 +78,14 @@
 </div>
 
 @code {
-    string Message { get; set; } = string.Empty;
-    Person CurrentPerson { get; set; } = new Person();
-    List<Person> People { get; set; } = new();
-    string NewStoreName { get; set; } = "";
-    List<string> Indexes { get; set; } = new();
-    string SelectedIndex { get; set; } = string.Empty;
-    string SearchString { get; set; } = string.Empty;
-    bool GetAll { get; set; }
+        string Message { get; set; } = string.Empty;
+        Person CurrentPerson { get; set; } = new Person();
+        List<Person> People { get; set; } = new();
+        string NewStoreName { get; set; } = "";
+        List<string> Indexes { get; set; } = new();
+        string SelectedIndex { get; set; } = string.Empty;
+        string SearchString { get; set; } = string.Empty;
+        bool GetAll { get; set; }
 
     protected override void OnInitialized()
     {
@@ -113,7 +114,7 @@
 
     protected async void GetRecords()
     {
-        var results = await DbManager.GetRecords<Person>(DbManager.Stores[0].Name);
+        var results = await DbManager.GetAllRecords<Person>(new(DbManager.Stores[0].Name, "", IndexedDBQuery.ValidKeyQuery("")));
 
         if (results != null && results.Data != null && results.Data.Any())
         {
@@ -221,16 +222,11 @@
 
         People.Clear();
 
-        var indexSearch = new StoreIndexQuery<string>
-            {
-                StoreName = DbManager.Stores[0].Name,
-                IndexName = SelectedIndex,
-                QueryValue = SearchString,
-            };
+        var indexSearch = new IndexedDBSearch(DbManager.Stores[0].Name, SelectedIndex, IndexedDBQuery.ValidKeyQuery(SearchString));
 
         if (GetAll)
         {
-            var result = await DbManager.GetAllRecordsByIndex<string, Person>(indexSearch);
+            var result = await DbManager.GetAllRecordsByIndex<Person>(indexSearch);
 
             if (result is null)
             {

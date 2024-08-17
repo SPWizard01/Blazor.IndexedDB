@@ -1,11 +1,13 @@
 using Blazor.IndexedDB;
 using Blazor.IndexedDB.Models;
 using Blazor.IndexedDB.Server.Components;
+using MudBlazor.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents().AddCircuitOptions(o => o.DetailedErrors = true);
+builder.Services.AddMudServices();
 builder.Services.AddIndexedDB(dbStore =>
 {
     dbStore.DbName = "TheFactory";
@@ -16,12 +18,11 @@ builder.Services.AddIndexedDB(dbStore =>
         Name = "Employees",
         PrimaryKey = new IndexSpec { Name = "id", KeyPath = ["id"], Auto = true },
         Indexes = [
-                        new IndexSpec{Name="IndexFirstName", KeyPath = ["firstName"], Auto=false},
-                        new IndexSpec{Name="IndexLastName", KeyPath = ["lastName"], Auto=false},
-                        new IndexSpec{Name="IndexSSN", KeyPath = ["ssn"], Auto=false},
-                        new IndexSpec{Name="bla", KeyPath = ["blad"], Auto=false},
-                        new IndexSpec{Name="IdxMulti", KeyPath = ["kp1","kp2"], Auto=false, MultiEntry = false},
-                        new IndexSpec{Name="IdxMultiTrue", KeyPath = ["kp3"], Auto=false, MultiEntry = true},
+                        new IndexSpec{Name="IndexFirstName", KeyPath = ["firstName"]},
+                        new IndexSpec{Name="IndexLastName", KeyPath = ["lastName"]},
+                        new IndexSpec{Name="IndexSSN", KeyPath = ["ssn"], Unique=false},
+                        new IndexSpec{Name="IdxMulti", KeyPath = ["kp1","kp2"], MultiEntry = false},
+                        new IndexSpec{Name="IdxMultiTrue", KeyPath = ["kp3"], MultiEntry = true},
                     ]
     });
 });

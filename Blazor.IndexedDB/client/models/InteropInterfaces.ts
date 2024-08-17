@@ -1,4 +1,6 @@
-﻿/**Defines the Database to open or create.*/
+﻿import { IndexedDBQuery } from "./queryValue";
+
+/**Defines the Database to open or create.*/
 export interface IDbStore {
     /**the name of the database*/
     dbName: string;
@@ -22,12 +24,12 @@ export interface IStoreRecord {
     data: any;
 }
 
-/**This used when querying a store using a predefined index*/
-export interface IIndexSearch {
+export interface IndexedDBSearch {
     storeName: string;
+    queryValue: IndexedDBQuery;
+}
+export interface IndexedDBQuerySearch extends IndexedDBSearch {
     indexName: string;
-    queryValue: any;
-    allMatching: boolean;
 }
 
 /**Index definition for a store */

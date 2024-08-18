@@ -15,6 +15,5 @@
         public object Upper { get; } = Upper;
         public bool LowerOpen { get; } = LowerOpen;
         public bool UpperOpen { get; } = UpperOpen;
-        public object TValue { get; set; } = "";
     }
 }

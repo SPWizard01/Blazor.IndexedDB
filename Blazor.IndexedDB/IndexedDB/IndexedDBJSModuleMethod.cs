@@ -13,8 +13,8 @@
         public static IndexedDBJSModuleMethod CreateDb { get; } = new("createDb");
         public static IndexedDBJSModuleMethod DeleteDb { get; } = new("deleteDb");
         public static IndexedDBJSModuleMethod AddRecord { get; } = new("addRecord");
-        public static IndexedDBJSModuleMethod DeleteRecord { get; } = new("deleteRecord");
         public static IndexedDBJSModuleMethod DeleteRecordByKey { get; } = new("deleteRecordByKey");
+        public static IndexedDBJSModuleMethod DeleteRecordByQuery { get; } = new("deleteRecordByQuery");
         public static IndexedDBJSModuleMethod UpdateRecord { get; } = new("updateRecord");
 
 

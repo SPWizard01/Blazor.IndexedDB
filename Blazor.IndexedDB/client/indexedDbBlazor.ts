@@ -1,5 +1,5 @@
 ﻿import { IDBPObjectStore, IDBPDatabase, openDB, deleteDB, TypedDOMStringList, StoreNames, IDBPTransaction } from "idb";
-import { IDbStore, IndexedDBQuerySearch, IStoreRecord, IStoreSchema, DBInformation, IIndexSpec, IndexedDBSearch } from "./models/InteropInterfaces";
+import { IIndexedDBDatabase, IndexedDBQuerySearch, IStoreRecord, IStoreSchema, DBInformation, IIndexSpec, IndexedDBSearch, IIndexedDBDatabaseInstance } from "./models/InteropInterfaces";
 import { DotNet } from "@microsoft/dotnet-js-interop";
 import { UpgradeOutcome } from "./models/upgradeOutcome";
 import { IndexedDBActionResult, IndexedDBActionResultFailure, IndexedDBActionResultSuccess } from "./models/actionResult";
@@ -9,7 +9,7 @@ const RAISE_EVENT_METHOD = "RaiseNotificationFromJS";
 //https://web.dev/articles/indexeddb
 export class IndexedDbManager {
 
-    private dbInstance: IDBPDatabase | undefined;
+    private instances: IIndexedDBDatabaseInstance[] = [];
     private _dbManagerRef: DotNet.DotNetObject;
     // private upgradeChannel: BroadcastChannel; 
 
@@ -18,15 +18,18 @@ export class IndexedDbManager {
     }
 
 
-    public async openDb(data: IDbStore) {
-        const dbStore = data;
+    public async openDb(dbStore: IIndexedDBDatabase) {
         const dbOpenOutcomes: IndexedDBActionResult<any>[] = [];
+        let dbInstance = this.getInstance(dbStore.name);
         try {
-            if (!this.dbInstance || this.dbInstance.version < dbStore.version) {
-                if (this.dbInstance) {
-                    this.dbInstance.close();
+            if (!dbInstance || dbInstance.instance.version < dbStore.version) {
+                if (dbInstance) {
+                    dbInstance.instance.close();
+                    this.instances.splice(this.instances.indexOf(dbInstance), 1);
+                    console.log(`Database ${dbInstance.name} closed`);
                 }
-                this.dbInstance = await openDB(dbStore.dbName, dbStore.version, {
+
+                const instance = await openDB(dbStore.name, dbStore.version, {
                     upgrade: async (database, oldVersion, newVersion, transaction) => {
 
                         const outcomes = this.upgradeDatabase(database, dbStore, oldVersion, newVersion!, transaction);
@@ -43,7 +46,8 @@ export class IndexedDbManager {
                         const message = `Database upgrade blocking. Current version: ${currentVersion}, Blocked version: ${blockedVersion}, trying to close db.`;
                         console.warn(message, event);
                         try {
-                            this.dbInstance!.close();
+                            let blockingInstance = this.getInstance(dbStore.name);;
+                            blockingInstance?.instance.close();
                             dbOpenOutcomes.push(
                                 this.getSuccessResult(message, undefined, "DatabaseUpgradeBlocking")
                             );
@@ -56,7 +60,9 @@ export class IndexedDbManager {
                             );
                         }
                     }
-                });
+                })
+                dbInstance = { name: dbStore.name, instance };
+                this.instances.push(dbInstance);
             }
         } catch (e) {
             const msg = `Could not open db ${e}`;
@@ -67,7 +73,7 @@ export class IndexedDbManager {
             return dbOpenOutcomes;
         }
         try {
-            const result = await this.verifySchema(this.dbInstance, dbStore);
+            const result = await this.verifySchema(dbInstance.instance, dbStore);
             dbOpenOutcomes.push(...result);
 
         }
@@ -91,12 +97,11 @@ export class IndexedDbManager {
 
     public async getDbInfo(dbName: string) {
         try {
-
-            await this.ensureDatabaseOpen(dbName);
+            const instance = this.getInstance(dbName)!.instance;
             const dbInfo: DBInformation = {
-                name: this.dbInstance!.name,
-                version: this.dbInstance!.version,
-                storeNames: this.getStoreNames(this.dbInstance!.objectStoreNames)
+                name: instance.name,
+                version: instance.version,
+                storeNames: this.getStoreNames(instance.objectStoreNames)
             };
 
             return this.getSuccessResult("Database information retrieved", dbInfo);
@@ -109,12 +114,13 @@ export class IndexedDbManager {
 
     public async deleteDb(dbName: string) {
         try {
-
-            this.dbInstance?.close();
+            const db = this.getInstance(dbName);
+            db?.instance.close();
 
             await deleteDB(dbName);
-
-            this.dbInstance = undefined;
+            if (db) {
+                this.instances.splice(this.instances.indexOf(db), 1);
+            }
             const msg = `The database ${dbName} has been deleted.`;
             return this.getSuccessResult(msg, undefined);
         }
@@ -122,14 +128,14 @@ export class IndexedDbManager {
             return this.getFailureResult(`Error deleting database: ${e}`);
         }
     }
-
-    public async addRecord(record: IStoreRecord) {
+    //#region CRUD
+    public async addRecord(dbName: string, record: IStoreRecord) {
         const stName = record.storeName;
         let itemToSave = record.data;
 
 
         try {
-            const tx = this.getTransaction(stName, "readwrite");
+            const tx = this.getTransaction(dbName, stName, "readwrite");
             const objectStore = tx.objectStore(stName);
 
             itemToSave = this.removePrimaryKeyPropertyIfAutoIncrement(objectStore, itemToSave);
@@ -149,10 +155,10 @@ export class IndexedDbManager {
 
     }
 
-    public async updateRecord(record: IStoreRecord) {
+    public async updateRecord(dbName: string, record: IStoreRecord) {
         const stName = record.storeName;
         try {
-            const tx = this.getTransaction(stName, "readwrite");
+            const tx = this.getTransaction(dbName, stName, "readwrite");
             const objectStore = tx.objectStore(stName);
             if (!objectStore.put) {
                 return this.getFailureResult("Put method not available on object store");
@@ -169,33 +175,30 @@ export class IndexedDbManager {
         }
     }
 
+    public async deleteRecordByQuery(dbName: string, query: IndexedDBSearch): Promise<IndexedDBActionResult<any>> {
 
-
-    public async deleteRecord(record: IStoreRecord): Promise<IndexedDBActionResult<any>> {
-        if (!record.key) {
-            return this.getFailureResult("Record key is required to delete a record");
-        }
-        const stName = record.storeName;
 
         try {
-            const tx = this.getTransaction(stName, "readwrite");
-            const objectStore = tx.objectStore(stName);
+            const { tx, objectStore, idbKeyResult } = this.getStoreQuery(dbName, query, "readwrite");
             if (!objectStore.delete) {
                 return this.getFailureResult("delete method not available on object store");
             }
-            await objectStore.delete(record.key);
+            if (!idbKeyResult.success) {
+                return this.getFailureResult(`Error deleting record: ${idbKeyResult.message}`);
+            }
+            await objectStore.delete(idbKeyResult.data.value);
             await tx.done;
-            return this.getSuccessResult(`Deleted record with key ${record.key} from store ${stName}`, undefined);
+            return this.getSuccessResult(`Deleted records from store ${query.storeName}`, undefined);
         }
         catch (e) {
             return this.getFailureResult(`Error deleting record: ${e}`);
         }
     }
 
-    public async deleteRecordByKey(storename: string, id: any): Promise<IndexedDBActionResult<any>> {
+    public async deleteRecordByKey(dbName: string, storename: string, id: any): Promise<IndexedDBActionResult<any>> {
 
         try {
-            const tx = this.getTransaction(storename, "readwrite");
+            const tx = this.getTransaction(dbName, storename, "readwrite");
             const objectStore = tx.objectStore(storename);
             if (!objectStore.delete) {
                 return this.getFailureResult("delete method not available on object store");
@@ -208,10 +211,10 @@ export class IndexedDbManager {
         }
     }
 
-    public async clearStore(storeName: string) {
+    public async clearStore(dbName: string, storeName: string) {
 
         try {
-            const tx = this.getTransaction(storeName, "readwrite");
+            const tx = this.getTransaction(dbName, storeName, "readwrite");
             await tx.objectStore(storeName).clear?.();
             await tx.done;
             return this.getSuccessResult(`Store ${storeName} cleared`, undefined);
@@ -221,12 +224,12 @@ export class IndexedDbManager {
         }
     }
 
-
+    //#endregion
 
     //#region IndexQueries
-    public async iterateRecordsByIndex(searchData: IndexedDBQuerySearch, direction?: IDBCursorDirection) {
+    public async iterateRecordsByIndex(dbName: string, searchData: IndexedDBQuerySearch, direction?: IDBCursorDirection) {
         try {
-            const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+            const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -243,9 +246,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getRecordByIndex(searchData: IndexedDBQuerySearch) {
+    public async getRecordByIndex(dbName: string, searchData: IndexedDBQuerySearch) {
         try {
-            const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+            const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -258,9 +261,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getAllRecordsByIndexQuery(searchData: IndexedDBQuerySearch, count?: number) {
+    public async getAllRecordsByIndexQuery(dbName: string, searchData: IndexedDBQuerySearch, count?: number) {
         try {
-            const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+            const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -273,9 +276,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getAllRecordsByIndex(searchData: IndexedDBQuerySearch) {
+    public async getAllRecordsByIndex(dbName: string, searchData: IndexedDBQuerySearch) {
         try {
-            const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+            const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -288,9 +291,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getAllKeysByIndex(searchData: IndexedDBQuerySearch, count?: number) {
+    public async getAllKeysByIndex(dbName: string, searchData: IndexedDBQuerySearch, count?: number) {
         try {
-            const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+            const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -303,9 +306,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getKeyByIndex(searchData: IndexedDBQuerySearch) {
+    public async getKeyByIndex(dbName: string, searchData: IndexedDBQuerySearch) {
         try {
-            const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
+            const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -320,9 +323,9 @@ export class IndexedDbManager {
     //#endregion
 
     //#region StoreRecordQueries
-    public async iterateRecords(searchData: IndexedDBSearch, direction?: IDBCursorDirection) {
+    public async iterateRecords(dbName: string, searchData: IndexedDBSearch, direction?: IDBCursorDirection) {
         try {
-            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -339,9 +342,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getRecord(searchData: IndexedDBSearch) {
+    public async getRecord(dbName: string, searchData: IndexedDBSearch) {
         try {
-            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -354,9 +357,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getAllRecords(searchData: IndexedDBSearch) {
+    public async getAllRecords(dbName: string, searchData: IndexedDBSearch) {
         try {
-            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -369,9 +372,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getAllRecordsByQuery(searchData: IndexedDBSearch, count?: number) {
+    public async getAllRecordsByQuery(dbName: string, searchData: IndexedDBSearch, count?: number) {
         try {
-            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -384,9 +387,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getAllKeys(searchData: IndexedDBSearch, count?: number) {
+    public async getAllKeys(dbName: string, searchData: IndexedDBSearch, count?: number) {
         try {
-            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -399,9 +402,9 @@ export class IndexedDbManager {
         }
     }
 
-    public async getKey(searchData: IndexedDBSearch) {
+    public async getKey(dbName: string, searchData: IndexedDBSearch) {
         try {
-            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
+            const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
             if (!idbKeyResult.success) {
                 return idbKeyResult
             }
@@ -445,21 +448,22 @@ export class IndexedDbManager {
     }
 
 
-    private getIndexQuery(searchData: IndexedDBQuerySearch, transactionMode: IDBTransactionMode) {
-        const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, transactionMode);
+    private getIndexQuery(dbName: string, searchData: IndexedDBQuerySearch, transactionMode: IDBTransactionMode) {
+        const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, transactionMode);
         const index = objectStore.index(searchData.indexName);
         return { index, tx, idbKeyResult };
     }
 
-    private getStoreQuery(searchData: IndexedDBSearch, transactionMode: IDBTransactionMode) {
-        const tx = this.getTransaction(searchData.storeName, transactionMode);
+    private getStoreQuery(dbName: string, searchData: IndexedDBSearch, transactionMode: IDBTransactionMode) {
+        const tx = this.getTransaction(dbName, searchData.storeName, transactionMode);
         const objectStore = tx.objectStore(searchData.storeName);
         const idbKeyResult = this.getIDBKey(searchData.queryValue);
         return { objectStore, tx, idbKeyResult };
     }
 
-    private getTransaction(stName: string, mode: IDBTransactionMode) {
-        const tx = this.dbInstance!.transaction(stName, mode);
+    private getTransaction(dbName: string, stName: string, mode: IDBTransactionMode) {
+        const db = this.getInstance(dbName);
+        const tx = db!.instance.transaction(stName, mode);
         return tx;
     }
 
@@ -476,7 +480,7 @@ export class IndexedDbManager {
         return data;
     }
 
-    private upgradeDatabase(upgradeDB: IDBPDatabase, dbStore: IDbStore, oldVersion: number, newVersion: number, transaction: IDBPTransaction<any, StoreNames<any>[], "versionchange">) {
+    private upgradeDatabase(upgradeDB: IDBPDatabase, dbStore: IIndexedDBDatabase, oldVersion: number, newVersion: number, transaction: IDBPTransaction<any, StoreNames<any>[], "versionchange">) {
         const outcomes: IndexedDBActionResult<any>[] = [];
         if (oldVersion < newVersion) {
             //might not be needed
@@ -519,7 +523,7 @@ export class IndexedDbManager {
 
 
 
-    private async verifySchema(upgradeDB: IDBPDatabase, dbStore: IDbStore) {
+    private async verifySchema(upgradeDB: IDBPDatabase, dbStore: IIndexedDBDatabase) {
         const result: IndexedDBActionResult<undefined>[] = [];
         if (dbStore.stores) {
             for (var store of dbStore.stores) {
@@ -625,10 +629,20 @@ export class IndexedDbManager {
         console.log(result);
         return result;
     }
-    private async ensureDatabaseOpen(dbName: string) {
-        if (!this.dbInstance) {
-            this.dbInstance = await openDB(dbName);
-        }
+
+    private getInstance(dbName: string) {
+        return this.instances.find(i => i.name.toLowerCase() === dbName.toLowerCase())
     }
+    // private async ensureDatabaseOpen(dbName: string) {
+    //     let dbInstance = this.instances.find(i => i.name === dbName);
+    //     if (!dbInstance) {
+    //         dbInstance = {
+    //             name: dbName,
+    //             instance: await openDB(dbName)
+    //         }
+    //         this.instances.push(dbInstance);
+    //     }
+    //     return dbInstance.instance;
+    // }
 
 }

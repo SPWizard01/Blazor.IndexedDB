@@ -11,6 +11,5 @@
         public IndexedDBQueryType QueryType { get; set; } = IndexedDBQueryType.UpperBoundQuery;
         public object Upper { get; } = Upper;
         public bool UpperOpen { get; } = UpperOpen;
-        public object TValue { get; set; } = "";
     }
 }

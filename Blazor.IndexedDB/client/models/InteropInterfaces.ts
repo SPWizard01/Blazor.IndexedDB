@@ -1,14 +1,19 @@
-﻿import { IndexedDBQuery } from "./queryValue";
+﻿import { IDBPDatabase } from "idb";
+import { IndexedDBQuery } from "./queryValue";
 
 /**Defines the Database to open or create.*/
-export interface IDbStore {
+export interface IIndexedDBDatabase {
     /**the name of the database*/
-    dbName: string;
+    name: string;
     /**The version for this instance. This value is used when opening a database to determine if it needs to be updated*/
     version: number;
     /**Defines the stores to be created in the database defined as IStoreSchema*/
     stores: IStoreSchema[];
+}
 
+export interface IIndexedDBDatabaseInstance {
+    name: string;
+    instance: IDBPDatabase;
 }
 
 /**Defines a store to be created in the database. */

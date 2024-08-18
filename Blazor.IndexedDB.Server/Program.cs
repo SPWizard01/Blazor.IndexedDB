@@ -10,10 +10,12 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 builder.Services.AddIndexedDB(dbStore =>
 {
-    dbStore.DbName = "TheFactory";
-    dbStore.Version = 1;
+    var firstDb = new IndexedDBDatabase("TheFactory")
+    {
+        Version = 1
+    };
 
-    dbStore.Stores.Add(new StoreSchema
+    firstDb.Stores.Add(new StoreSchema
     {
         Name = "Employees",
         PrimaryKey = new IndexSpec { Name = "id", KeyPath = ["id"], Auto = true },
@@ -25,6 +27,7 @@ builder.Services.AddIndexedDB(dbStore =>
                         new IndexSpec{Name="IdxMultiTrue", KeyPath = ["kp3"], MultiEntry = true},
                     ]
     });
+    dbStore.Add(firstDb);
 });
 var app = builder.Build();
 

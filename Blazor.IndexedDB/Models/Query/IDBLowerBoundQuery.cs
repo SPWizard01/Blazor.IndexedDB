@@ -11,6 +11,5 @@
         public IndexedDBQueryType QueryType { get; set; } = IndexedDBQueryType.LowerBoundQuery;
         public object Lower { get; } = Lower;
         public bool LowerOpen { get; } = LowerOpen;
-        public object TValue { get; set; } = "";
     }
 }

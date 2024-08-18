@@ -5,13 +5,13 @@ namespace Blazor.IndexedDB.Models
     /// <summary>
     /// Used to define the database and associated stores
     /// </summary>
-    public class DbStore
+    public class IndexedDBDatabase(string name)
     {
 
         /// <summary>
         /// Name of the database to create
         /// </summary>
-        public string DbName { get; set; }
+        public string Name { get; set; } = name;
         /// <summary>
         /// the version of the database. Increment the value when adding a new store.
         /// </summary>

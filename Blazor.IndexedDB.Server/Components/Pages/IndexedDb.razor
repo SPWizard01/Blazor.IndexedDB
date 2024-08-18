@@ -7,36 +7,109 @@
 @inject IndexedDBManager DbManager
 @inject DbStore DbStore
 
-<div>
-    <p><b>status:</b> @Message</p>
-    <p><b>Db version:</b> @DbManager.CurrentVersion</p>
-    <p><b>stores:</b> @string.Join(", ", DbManager.Stores.Select(s => s.Name))</p>
+<MudStack Row="true">
+    <MudPaper Class="pa-2 ma-2">Status: </MudPaper>
+    <MudPaper Class="pa-2 ma-2">@Message</MudPaper>
+</MudStack>
+<MudStack Row="true">
+    <MudPaper Class="pa-2 ma-2">DB Version: </MudPaper>
+    <MudPaper Class="pa-2 ma-2">@DbManager.CurrentVersion</MudPaper>
 
-</div>
+</MudStack>
+<MudStack Row="true">
+    <MudPaper Class="pa-2 ma-2">Stores: </MudPaper>
+    <MudPaper Class="pa-2 ma-2">@string.Join(", ", DbManager.Stores.Select(s => s.Name))</MudPaper>
+</MudStack>
+<MudStack Row="true" Class="pa-2 ma-2">
+    <MudButton OnClick="OpenDatabaseAsync" Variant="Variant.Outlined">Open Database</MudButton>
+    <MudButton OnClick="GetRecords" Variant="Variant.Outlined">Get Records</MudButton>
+    <MudButton OnClick="ClearStore" Variant="Variant.Outlined">Clear Store</MudButton>
+    <MudButton OnClick="DeleteDatabase" Variant="Variant.Outlined">Delete Database</MudButton>
+</MudStack>
+<MudPaper Outlined="true" Class="pa-2 ma-2">
+    <MudText Typo="Typo.h6">Search Records</MudText>
+    <MudStack Row="true" Justify="Justify.FlexStart">
+        <MudStack>
+            <MudSwitch Color="Color.Primary" Value="true">Primary Key Search</MudSwitch>
+            <MudSwitch Color="Color.Primary" Value="false">Return All</MudSwitch>
+
+            <MudSelect T="string" Label="Index" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var index in Indexes)
+                {
+                    <MudSelectItem Value="index" />
+                }
+            </MudSelect>
+            <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="SearchForRecords">Search</MudButton>
+        </MudStack>
+        <MudStack>
+            <MudRadioGroup Value="false">
+                <MudStack Row="true">
+                    <MudStack>
+                        <MudText>Simple Query</MudText>
+                        <MudPaper Outlined="true" Class="pa-1">
+                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                <MudStack>
+                                    <MudTextField Label="Search String" Variant="Variant.Outlined" @bind-Value="SearchString" />
+                                </MudStack>
+                            </MudRadio>
+                        </MudPaper>
+                    </MudStack>
+                    <MudStack>
+                        <MudText>Bound Query</MudText>
+                        <MudPaper Outlined="true" Class="pa-1">
+                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                <MudStack>
+                                    <MudTextField Label="Lower" Variant="Variant.Outlined" @bind-Value="SearchString" />
+                                    <MudTextField Label="Upper" Variant="Variant.Outlined" @bind-Value="SearchString" />
+                                    <MudSwitch Color="Color.Primary" Value="false">Exclude Lower</MudSwitch>
+                                    <MudSwitch Color="Color.Primary" Value="false">Exclude Upper</MudSwitch>
+                                </MudStack>
+                            </MudRadio>
+                        </MudPaper>
+                    </MudStack>
+                    <MudStack>
+                        <MudText>Lower Bound Query</MudText>
+                        <MudPaper Outlined="true" Class="pa-1">
+                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                <MudStack>
+                                    <MudTextField Label="Lower" Variant="Variant.Outlined" @bind-Value="SearchString" />
+                                    <MudSwitch Color="Color.Primary" Value="false">Exclude Lower</MudSwitch>
+                                </MudStack>
+                            </MudRadio>
+                        </MudPaper>
+                    </MudStack>
+                    <MudStack>
+                        <MudText>Upper Bound Query</MudText>
+                        <MudPaper Outlined="true" Class="pa-1">
+                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                <MudStack>
+                                    <MudTextField Label="Upper" Variant="Variant.Outlined" @bind-Value="SearchString" />
+                                    <MudSwitch Color="Color.Primary" Value="false">Exclude Upper</MudSwitch>
+                                </MudStack>
+                            </MudRadio>
+                        </MudPaper>
+                    </MudStack>
+                    <MudStack>
+                        <MudText>Only Query</MudText>
+                        <MudPaper Outlined="true" Class="pa-1">
+                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                <MudStack>
+                                    <MudTextField Label="Search String" Variant="Variant.Outlined" @bind-Value="SearchString" />
+                                </MudStack>
+                            </MudRadio>
+                        </MudPaper>
+                    </MudStack>
+                </MudStack>
+            </MudRadioGroup>
+
+        </MudStack>
+
+    </MudStack>
+</MudPaper>
 <div class="d-flex flex-row align-items-start">
     <div class="d-flex flex-column">
-        <button class="btn btn-outline-primary m-4" @onclick="OpenDatabaseAsync">Open Database</button>
-        <button class="btn btn-outline-primary m-4" @onclick="GetRecords">Get Records</button>
-        <div class="m-4 d-flex flex-column">
-            <div class="d-flex flex-row">
-                <label for="selectIndex" class="col-md-4">Select Index</label>
-                <select class="form-control" id="selectIndex" @bind="SelectedIndex">
-                    <option value="default" selected></option>
-                    @foreach (var index in Indexes)
-                    {
-                        <option value="@index">@index</option>
-                    }
-                </select>
-            </div>
-            <div class="d-flex flex-row">
-                <label for="selectAll">Return all matches</label>
-                <input id="selectAll" type="checkbox" class="form-check-input" @bind="@GetAll" />
-            </div>
-            <input type="text" placeholder="Record for search" @bind="SearchString" />
-            <button class="btn btn-outline-primary mr-2" @onclick="SearchForRecords">Search</button>
-        </div>
-        <button class="btn btn-outline-primary m-4" @onclick="ClearStore">Clear Store</button>
-        <button class="btn btn-outline-primary m-4" @onclick="DeleteDatabase">Delete Database</button>
+
+
         <div class="m-4 d-flex flex-row">
             <button class="btn btn-outline-primary mr-2" @onclick="AddNewStore">Add New Store</button>
             <input type="text" placeholder="Enter new store name" @bind="NewStoreName" />
@@ -78,14 +151,14 @@
 </div>
 
 @code {
-        string Message { get; set; } = string.Empty;
-        Person CurrentPerson { get; set; } = new Person();
-        List<Person> People { get; set; } = new();
-        string NewStoreName { get; set; } = "";
-        List<string> Indexes { get; set; } = new();
-        string SelectedIndex { get; set; } = string.Empty;
-        string SearchString { get; set; } = string.Empty;
-        bool GetAll { get; set; }
+    string Message { get; set; } = string.Empty;
+    Person CurrentPerson { get; set; } = new Person();
+    List<Person> People { get; set; } = new();
+    string NewStoreName { get; set; } = "";
+    List<string> Indexes { get; set; } = new();
+    string SelectedIndex { get; set; } = string.Empty;
+    string SearchString { get; set; } = string.Empty;
+    bool GetAll { get; set; }
 
     protected override void OnInitialized()
     {

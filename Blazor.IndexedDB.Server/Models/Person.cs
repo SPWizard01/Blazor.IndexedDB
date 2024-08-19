@@ -8,7 +8,7 @@ namespace Blazor.IndexedDB.Server.Models
         public long? Id { get; set; }
         public string FirstName { get; set; } = fkr.Name.FirstName();
         public string LastName { get; set; } = fkr.Name.LastName();
-        public long Ssn { get; set; } = fkr.Random.Long();
+        public long Ssn { get; set; } = fkr.Random.Long(1123456789);
         public string Blad { get; set; } = fkr.Rant.Review();
         public string Kp1 { get; set; } = fkr.Random.Word();
         public int Kp2 { get; set; } = fkr.Random.Number();

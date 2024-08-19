@@ -48,7 +48,7 @@ namespace Blazor.IndexedDB
                 var result = await CallJavaScriptReturnMany<string?>(IndexedDBJSModuleMethod.OpenDb, db);
                 _isOpen = true;
 
-                await GetCurrentDbState(db.Name);
+                await GetCurrentDbState(db);
             }
             catch (JSException jse)
             {
@@ -62,32 +62,31 @@ namespace Blazor.IndexedDB
         /// </summary>
         /// <param name="dbName">The name of database to delete</param>
         /// <returns></returns>
-        public async Task DeleteDb(string dbName)
+        public async Task DeleteDb(IndexedDBDatabase db)
         {
-            if (string.IsNullOrEmpty(dbName))
+            if (string.IsNullOrEmpty(db.Name))
             {
-                throw new ArgumentException("dbName cannot be null or empty", nameof(dbName));
+                throw new ArgumentException("Database Name cannot be null or empty");
             }
-            var result = await CallJavaScript<string?>(IndexedDBJSModuleMethod.DeleteDb, dbName);
+            var result = await CallJavaScript<string?>(IndexedDBJSModuleMethod.DeleteDb, db.Name);
 
         }
 
-        public async Task GetCurrentDbState(string dbName)
+        public async Task GetCurrentDbState(IndexedDBDatabase db)
         {
-            var _dbStore = DBStore.First(s => s.Name == dbName);
-            var result = await CallJavaScript<DBInformation>(IndexedDBJSModuleMethod.GetDbInfo, dbName);
+            var result = await CallJavaScript<DBInformation>(IndexedDBJSModuleMethod.GetDbInfo, db.Name);
 
-            if (result.Data?.Version > _dbStore.Version)
+            if (result.Data?.Version > db.Version)
             {
-                _dbStore.Version = result.Data.Version;
+                db.Version = result.Data.Version;
 
-                var currentStores = _dbStore.Stores.Select(s => s.Name);
+                var currentStores = db.Stores.Select(s => s.Name);
 
                 foreach (var storeName in result.Data.StoreNames)
                 {
                     if (!currentStores.Contains(storeName))
                     {
-                        _dbStore.Stores.Add(new StoreSchema { Name = storeName });
+                        db.Stores.Add(new StoreSchema { Name = storeName });
 
                     }
                 }
@@ -99,22 +98,21 @@ namespace Blazor.IndexedDB
         /// </summary>
         /// <param name="storeSchema"></param>
         /// <returns></returns>
-        public async Task AddNewStore(string dbName, StoreSchema storeSchema)
+        public async Task AddNewStore(IndexedDBDatabase db, StoreSchema storeSchema)
         {
             if (storeSchema == null)
             {
                 return;
             }
-            var _dbStore = DBStore.First(s => s.Name == dbName);
-            if (_dbStore.Stores.Any(s => s.Name == storeSchema.Name))
+            if (db.Stores.Any(s => s.Name == storeSchema.Name))
             {
                 return;
             }
 
-            _dbStore.Stores.Add(storeSchema);
-            _dbStore.Version += 1;
+            db.Stores.Add(storeSchema);
+            db.Version += 1;
 
-            var result = await CallJavaScript<string>(IndexedDBJSModuleMethod.OpenDb, _dbStore);
+            var result = await CallJavaScript<string>(IndexedDBJSModuleMethod.OpenDb, db.Name);
             _isOpen = true;
 
             RaiseNotification(IndexDBActionOutcome.TableCreated, $"new store {storeSchema.Name} added");
@@ -127,9 +125,9 @@ namespace Blazor.IndexedDB
         /// <param name="recordToAdd">An instance of StoreRecord that provides the store name and the data to add</param>
         /// <returns></returns>
 
-        public async Task<IndexedDBActionResult<T>> AddRecord<T>(string dbName, StoreRecord<T> recordToAdd)
+        public async Task<IndexedDBActionResult<T>> AddRecord<T>(IndexedDBDatabase db, StoreRecord<T> recordToAdd)
         {
-            return await CallJavaScript<T>(IndexedDBJSModuleMethod.AddRecord, dbName, recordToAdd);
+            return await CallJavaScript<T>(IndexedDBJSModuleMethod.AddRecord, db.Name, recordToAdd);
         }
 
         /// <summary>
@@ -138,9 +136,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="T"></typeparam>
         /// <param name="recordToUpdate">An instance of StoreRecord with the store name and the record to update</param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<T>> UpdateRecord<T>(string dbName, StoreRecord<T> recordToUpdate)
+        public async Task<IndexedDBActionResult<T>> UpdateRecord<T>(IndexedDBDatabase db, StoreRecord<T> recordToUpdate)
         {
-            return await CallJavaScript<T>(IndexedDBJSModuleMethod.UpdateRecord, dbName, recordToUpdate);
+            return await CallJavaScript<T>(IndexedDBJSModuleMethod.UpdateRecord, db.Name, recordToUpdate);
 
         }
 
@@ -152,13 +150,13 @@ namespace Blazor.IndexedDB
         /// <param name="storeName">The name of the  store to retrieve the record from</param>
         /// <param name="id">the id of the record</param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> GetRecordById<TInput, TResult>(string storeName, TInput id)
+        public async Task<IndexedDBActionResult<TResult>> GetRecordById<TInput, TResult>(IndexedDBDatabase db, string storeName, TInput id)
         {
 
             var data = new { Storename = storeName, Id = id };
             try
             {
-                var record = await CallJavaScript<TResult>(IndexedDBJSModuleMethod.GetRecordById, storeName, id!);
+                var record = await CallJavaScript<TResult>(IndexedDBJSModuleMethod.GetRecordById, db.Name, storeName, id!);
 
                 return record;
             }
@@ -176,11 +174,11 @@ namespace Blazor.IndexedDB
         /// <param name="storeName"></param>
         /// <param name="id"></param>
         /// <returns></returns>
-        public async Task DeleteRecordByQuery(string dbName, string storeName, IndexedDBRangeQuery query)
+        public async Task DeleteRecordByQuery(IndexedDBDatabase db, string storeName, IndexedDBRangeQuery query)
         {
             try
             {
-                await CallJavaScript<string>(IndexedDBJSModuleMethod.DeleteRecordByQuery, dbName, storeName, query);
+                await CallJavaScript<string>(IndexedDBJSModuleMethod.DeleteRecordByQuery, db.Name, storeName, query);
             }
             catch (JSException jse)
             {
@@ -195,11 +193,11 @@ namespace Blazor.IndexedDB
         /// <param name="storeName"></param>
         /// <param name="id"></param>
         /// <returns></returns>
-        public async Task DeleteRecordByKey(string dbName, string storeName, IDBValidKeyQuery<object> key)
+        public async Task DeleteRecordByKey(IndexedDBDatabase db, string storeName, IDBValidKeyQuery<object> key)
         {
             try
             {
-                await CallJavaScript<string>(IndexedDBJSModuleMethod.DeleteRecordByKey, dbName, storeName, key);
+                await CallJavaScript<string>(IndexedDBJSModuleMethod.DeleteRecordByKey, db.Name, storeName, key);
                 RaiseNotification(IndexDBActionOutcome.RecordDeleted, $"Deleted from {storeName} record: {key}");
             }
             catch (JSException jse)
@@ -213,7 +211,7 @@ namespace Blazor.IndexedDB
         /// </summary>
         /// <param name="storeName">The name of the store to clear the records from</param>
         /// <returns></returns>
-        public async Task ClearStore(string dbName, string storeName)
+        public async Task ClearStore(IndexedDBDatabase db, string storeName)
         {
             if (string.IsNullOrEmpty(storeName))
             {
@@ -222,7 +220,7 @@ namespace Blazor.IndexedDB
 
             try
             {
-                var result = await CallJavaScript<string?>(IndexedDBJSModuleMethod.ClearStore, dbName, storeName);
+                var result = await CallJavaScript<string?>(IndexedDBJSModuleMethod.ClearStore, db.Name, storeName);
             }
             catch (JSException jse)
             {
@@ -239,10 +237,12 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery">an instance of StoreIndexQuery</param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> IterateRecordsByIndex<TResult>(IIndexedDBQuery searchQuery, IndexedDBDirection direction)
+        public async Task<IndexedDBActionResult<TResult>> IterateRecordsByIndex<TResult>(IndexedDBDatabase db, IIndexedDBQuery searchQuery, IndexedDBDirection direction)
         {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecordsByIndex, searchQuery, direction);
+            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecordsByIndex, db.Name, searchQuery, direction);
         }
+
+
 
 
         /// <summary>
@@ -250,9 +250,9 @@ namespace Blazor.IndexedDB
         /// </summary>
         /// <param name="searchQuery" cref="IndexedDBSearch">an instance of IndexedDBSearch</param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> GetRecordByIndex<TInput, TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<TResult>> GetRecordByIndex<TInput, TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.GetRecordByIndex, searchQuery);
+            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.GetRecordByIndex, db.Name, searchQuery);
         }
 
         /// <summary>
@@ -262,9 +262,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllRecordsByIndexQuery<TInput, TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllRecordsByIndexQuery<TInput, TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByIndexQuery, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByIndexQuery, db.Name, searchQuery);
         }
 
         /// <summary>
@@ -273,9 +273,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllRecordsByIndex<TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllRecordsByIndex<TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByIndex, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByIndex, db.Name, searchQuery);
         }
 
         /// <summary>
@@ -284,9 +284,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllKeysByIndex<TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllKeysByIndex<TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllKeysByIndex, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllKeysByIndex, db.Name, searchQuery);
         }
 
         /// <summary>
@@ -295,9 +295,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetKeyByIndex<TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<IList<TResult>>> GetKeyByIndex<TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetKeyByIndex, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetKeyByIndex, db.Name, searchQuery);
         }
         #endregion
 
@@ -308,9 +308,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery">an instance of StoreIndexQuery</param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> IterateRecords<TResult>(IIndexedDBQuery searchQuery, IndexedDBDirection direction)
+        public async Task<IndexedDBActionResult<TResult>> IterateRecords<TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery, IndexedDBDirection direction)
         {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecords, searchQuery, direction);
+            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecords, db.Name, searchQuery, direction);
         }
 
 
@@ -319,9 +319,9 @@ namespace Blazor.IndexedDB
         /// </summary>
         /// <param name="searchQuery" cref="IndexedDBSearch">an instance of IndexedDBSearch</param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> GetRecord<TInput, TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<TResult>> GetRecord<TInput, TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.GetRecordByIndex, searchQuery);
+            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.GetRecordByIndex, db.Name, searchQuery);
         }
 
         /// <summary>
@@ -331,9 +331,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllRecordsByQuery<TInput, TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllRecordsByQuery<TInput, TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByQuery, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByQuery, db.Name, searchQuery);
         }
 
         /// <summary>
@@ -342,9 +342,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllRecords<TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllRecords<TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllRecords, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllRecords, db.Name, searchQuery);
         }
 
         /// <summary>
@@ -353,9 +353,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllKeys<TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<IList<TResult>>> GetAllKeys<TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllKeys, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetAllKeys, db.Name, searchQuery);
         }
 
         /// <summary>
@@ -364,9 +364,9 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetKey<TResult>(IndexedDBSearch searchQuery)
+        public async Task<IndexedDBActionResult<IList<TResult>>> GetKey<TResult>(IndexedDBDatabase db, IndexedDBSearch searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetKey, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetKey, db.Name, searchQuery);
         }
         #endregion
 

@@ -530,6 +530,23 @@ var IndexedDbManager = class {
       return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
     }
   }
+  async *iterateAsyncRecords(dbName, searchData, direction) {
+    console.log("Iterating async records");
+    try {
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = [];
+      const recordIterator = objectStore.iterate(idbKeyResult.data.value, direction);
+      for await (const cursor of recordIterator) {
+        yield this.getSuccessResult(`Record retrieved from index ${searchData.storeName}`, results);
+      }
+      await tx.done;
+    } catch (e) {
+      return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
+    }
+  }
   async getRecord(dbName, searchData) {
     try {
       const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");

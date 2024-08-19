@@ -1,5 +1,5 @@
 ﻿import { IDBPDatabase } from "idb";
-import { IndexedDBQuery } from "./queryValue";
+import { IndexedDBQueryType } from "./queryValue";
 
 /**Defines the Database to open or create.*/
 export interface IIndexedDBDatabase {
@@ -23,19 +23,7 @@ export interface IStoreSchema {
     indexes: IIndexSpec[];
 }
 /** */
-export interface IStoreRecord {
-    storeName: string;
-    key?: any;
-    data: any;
-}
 
-export interface IndexedDBSearch {
-    storeName: string;
-    queryValue: IndexedDBQuery;
-}
-export interface IndexedDBQuerySearch extends IndexedDBSearch {
-    indexName: string;
-}
 
 /**Index definition for a store */
 export interface IIndexSpec {

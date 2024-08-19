@@ -3,7 +3,7 @@
     /// <summary>
     /// Defines an Index for a given object store.
     /// </summary>
-    public class IndexSpec
+    public class IndexedDBIndex
     {
         /// <summary>
         /// The name of the index.
@@ -31,12 +31,12 @@
 
         /// <summary>
         /// Determines whether the index value should be generate by IndexDB.
-        /// Only use if you are defining a primary <see cref="IndexSpec.KeyPath"/> such as "id"
+        /// Only use if you are defining a primary <see cref="IndexedDBIndex.KeyPath"/> such as "id"
         /// <para>
-        /// Will throw an error if set to true and the <see cref="IndexSpec.KeyPath"/> is an array with more than one item.
+        /// Will throw an error if set to true and the <see cref="IndexedDBIndex.KeyPath"/> is an array with more than one item.
         /// </para>
         /// <para>
-        /// Has no effect when specified in <see cref="StoreSchema.Indexes"/>.
+        /// Has no effect when specified in <see cref="IndexedDBStoreSchema.Indexes"/>.
         /// </para>
         /// </summary>
         public bool Auto { get; set; }

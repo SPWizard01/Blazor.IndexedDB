@@ -1,11 +1,13 @@
-export type IndexedDBQueryType = "BoundQuery" | "LowerBoundQuery" | "UpperBoundQuery" | "OnlyQuery" | "ValidKeyQuery";
+import { IndexedDBObjectBase } from "./record";
+
+export type IndexedDBQueryValueType = "BoundQuery" | "LowerBoundQuery" | "UpperBoundQuery" | "OnlyQuery" | "ValidKeyQuery" | "NoQuery";
 export interface IndexedDBQueryBase {
-    queryType: IndexedDBQueryType
+    queryType: IndexedDBQueryValueType
 }
 export interface IndexedDBBoundQuery extends IndexedDBQueryBase {
     queryType: "BoundQuery";
-    lowerBound: any;
-    upperBound: any;
+    lower: any;
+    upper: any;
     lowerOpen: boolean;
     upperOpen: boolean;
 }
@@ -28,8 +30,11 @@ export interface IndexedDBKeyValueQuery extends IndexedDBQueryBase {
     queryType: "ValidKeyQuery";
     value: IDBValidKey
 }
+export interface IndexedDBNoQuery extends IndexedDBQueryBase {
+    queryType: "NoQuery";
+}
 
-export type IndexedDBQuery = IndexedDBBoundQuery | IndexedDBLowerBoundQuery | IndexedDBUpperBoundQuery | IndexedDBOnlyQuery | IndexedDBKeyValueQuery;
+export type IndexedDBQueryType = IndexedDBBoundQuery | IndexedDBLowerBoundQuery | IndexedDBUpperBoundQuery | IndexedDBOnlyQuery | IndexedDBKeyValueQuery | IndexedDBNoQuery;
 
 export interface IndexedDBQueryConvertionKeyRange {
     type: "KeyRange";
@@ -41,4 +46,17 @@ export interface IndexedDBQueryConvertionValidKey {
     value: IDBValidKey
 }
 
-export type IndexedDBQueryConvertion = IndexedDBQueryConvertionKeyRange | IndexedDBQueryConvertionValidKey;
+export interface IndexedDBQueryConvertionNoQuery {
+    type: "NoQuery";
+    value: undefined
+}
+
+export type IndexedDBQueryConvertion = IndexedDBQueryConvertionKeyRange | IndexedDBQueryConvertionValidKey | IndexedDBQueryConvertionNoQuery;
+
+
+export interface IndexedDBQuery extends IndexedDBObjectBase {
+    queryValue: IndexedDBQueryType;
+}
+export interface IndexedDBIndexQuery extends IndexedDBQuery {
+    indexName: string;
+}

@@ -1,3 +1,5 @@
+import { IndexedDBRecordBase } from "./record";
+
 export interface IndexedDBActionResultBase {
     success: boolean;
     message: string;
@@ -6,7 +8,7 @@ export interface IndexedDBActionResultBase {
 
 export interface IndexedDBActionResultSuccess<T> extends IndexedDBActionResultBase {
     success: true
-    data: T;
+    result: IndexedDBRecordBase<T>;
 }
 
 export interface IndexedDBActionResultFailure extends IndexedDBActionResultBase {
@@ -15,10 +17,3 @@ export interface IndexedDBActionResultFailure extends IndexedDBActionResultBase 
 }
 
 export type IndexedDBActionResult<T> = IndexedDBActionResultSuccess<T> | IndexedDBActionResultFailure;
-
-// export interface IndexedDBActionResult<T> {
-//     success: boolean;
-//     data: T;
-//     message: string;
-//     type?: string;
-// }

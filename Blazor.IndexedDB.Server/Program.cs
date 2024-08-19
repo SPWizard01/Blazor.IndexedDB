@@ -22,36 +22,36 @@ builder.Services.AddIndexedDB(dbStore =>
         Version = 1
     };
 
-    firstDb.Stores.Add(new StoreSchema
+    firstDb.Stores.Add(new IndexedDBStoreSchema
     {
         Name = "Employees",
-        PrimaryKey = new IndexSpec { Name = "id", KeyPath = ["id"], Auto = true },
+        PrimaryKey = new IndexedDBIndex { Name = "id", KeyPath = ["id"], Auto = true },
         Indexes = [
-                        new IndexSpec{Name="IndexFirstName", KeyPath = ["firstName"]},
-                        new IndexSpec{Name="IndexLastName", KeyPath = ["lastName"]},
-                        new IndexSpec{Name="IndexSSN", KeyPath = ["ssn"], Unique=false},
-                        new IndexSpec{Name="IdxMulti", KeyPath = ["kp1","kp2"], MultiEntry = false},
-                        new IndexSpec{Name="IdxMultiTrue", KeyPath = ["kp3"], MultiEntry = true},
+                        new IndexedDBIndex{Name="IndexFirstName", KeyPath = ["firstName"]},
+                        new IndexedDBIndex{Name="IndexLastName", KeyPath = ["lastName"]},
+                        new IndexedDBIndex{Name="IndexSSN", KeyPath = ["ssn"], Unique=false},
+                        new IndexedDBIndex{Name="IdxMulti", KeyPath = ["kp1","kp2"], MultiEntry = false},
+                        new IndexedDBIndex{Name="IdxMultiTrue", KeyPath = ["kp3"], MultiEntry = true},
                     ]
     });
     var secondDb = new IndexedDBDatabase("VehicleFactory")
     {
         Version = 1
     };
-    secondDb.Stores.Add(new StoreSchema
+    secondDb.Stores.Add(new IndexedDBStoreSchema
     {
         Name = "Vehicles",
-        PrimaryKey = new IndexSpec { Name = "id", KeyPath = ["id"], Auto = true },
+        PrimaryKey = new IndexedDBIndex { Name = "id", KeyPath = ["id"], Auto = true },
         Indexes = [
-                        new IndexSpec{Name="IndexModel", KeyPath = ["model"]},
-                        new IndexSpec{Name="IndexMake", KeyPath = ["make"]},
-                        new IndexSpec{Name="IndexMakeArray", KeyPath = ["make"], KeepAsArrayOnSingleValue=true},
-                        new IndexSpec{Name="IndexType", KeyPath = ["type"], Unique=false},
-                        new IndexSpec{Name="IndexFuelType", KeyPath = ["fuelType"], Unique=false},
-                        new IndexSpec{Name="IndexVin", KeyPath = ["vin"], Unique=true},
-                        new IndexSpec{Name="IndexReleaseYear", KeyPath = ["releaseYear"], Unique=false},
-                        new IndexSpec{Name="IndexMakeModel", KeyPath = ["make","model"], Unique=false},
-                        new IndexSpec{Name="IndexReviews", KeyPath = ["reviews"], MultiEntry=true},
+                        new IndexedDBIndex{Name="IndexModel", KeyPath = ["model"]},
+                        new IndexedDBIndex{Name="IndexMake", KeyPath = ["make"]},
+                        new IndexedDBIndex{Name="IndexMakeArray", KeyPath = ["make"], KeepAsArrayOnSingleValue=true},
+                        new IndexedDBIndex{Name="IndexType", KeyPath = ["type"], Unique=false},
+                        new IndexedDBIndex{Name="IndexFuelType", KeyPath = ["fuelType"], Unique=false},
+                        new IndexedDBIndex{Name="IndexVin", KeyPath = ["vin"], Unique=true},
+                        new IndexedDBIndex{Name="IndexReleaseYear", KeyPath = ["releaseYear"], Unique=false},
+                        new IndexedDBIndex{Name="IndexMakeModel", KeyPath = ["make","model"], Unique=false},
+                        new IndexedDBIndex{Name="IndexReviews", KeyPath = ["reviews"], MultiEntry=true},
                     ]
     });
     dbStore.Add(firstDb);

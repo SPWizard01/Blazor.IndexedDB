@@ -19,7 +19,7 @@ namespace Blazor.IndexedDB.Models
         /// <summary>
         /// A list of store schemas used to create the database stores.
         /// </summary>
-        public List<StoreSchema> Stores { get; } = [];
+        public List<IndexedDBStoreSchema> Stores { get; } = [];
 
     }
 }

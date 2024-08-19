@@ -6,7 +6,7 @@
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/API/IDBKeyRange/lowerBound_static">MDN Reference</seealso>
     /// </para>
     /// </summary>
-    public sealed class IDBLowerBoundQuery(object Lower, bool LowerOpen = false) : IIndexedDBQuery
+    public sealed class IndexedDBQueryLowerBound(object Lower, bool LowerOpen = false) : IIndexedDBQuery
     {
         public IndexedDBQueryType QueryType { get; set; } = IndexedDBQueryType.LowerBoundQuery;
         public object Lower { get; } = Lower;

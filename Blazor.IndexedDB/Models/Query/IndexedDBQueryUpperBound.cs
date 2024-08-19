@@ -6,7 +6,7 @@
     /// <seealso href="https://developer.mozilla.org/docs/Web/API/IDBKeyRange/upperBound_static">MDN Reference</seealso>
     /// </para>
     /// </summary>
-    public sealed class IDBUpperBoundQuery(object Upper, bool UpperOpen = false) : IIndexedDBQuery
+    public sealed class IndexedDBQueryUpperBound(object Upper, bool UpperOpen = false) : IIndexedDBQuery
     {
         public IndexedDBQueryType QueryType { get; set; } = IndexedDBQueryType.UpperBoundQuery;
         public object Upper { get; } = Upper;

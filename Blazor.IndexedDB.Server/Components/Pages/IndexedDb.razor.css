@@ -1,0 +1,7 @@
+﻿::deep .selected {
+    background-color: #1E88E5 !important;
+}
+
+    ::deep .selected > td {
+        color: white !important;
+    }

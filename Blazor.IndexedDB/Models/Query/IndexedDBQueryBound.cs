@@ -8,7 +8,7 @@
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/API/IDBKeyRange/bound_static">MDN Reference</seealso>
     /// </para>
     /// </summary>
-    public sealed class IDBBoundQuery(object Lower, object Upper, bool LowerOpen = false, bool UpperOpen = false) : IIndexedDBQuery
+    public sealed class IndexedDBQueryBound(object Lower, object Upper, bool LowerOpen = false, bool UpperOpen = false) : IIndexedDBQuery
     {
         public IndexedDBQueryType QueryType { get; set; } = IndexedDBQueryType.BoundQuery;
         public object Lower { get; } = Lower;

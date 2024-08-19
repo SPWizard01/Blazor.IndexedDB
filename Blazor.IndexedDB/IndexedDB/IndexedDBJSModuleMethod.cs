@@ -37,7 +37,6 @@
 
         public static IndexedDBJSModuleMethod GetRecords { get; } = new("getRecords");
         public static IndexedDBJSModuleMethod OpenDb { get; } = new("openDb");
-        public static IndexedDBJSModuleMethod GetRecordById { get; } = new("getRecordById");
         public static IndexedDBJSModuleMethod ClearStore { get; } = new("clearStore");
         public static IndexedDBJSModuleMethod GetDbInfo { get; } = new("getDbInfo");
 

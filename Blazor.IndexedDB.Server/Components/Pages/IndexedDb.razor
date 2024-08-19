@@ -1,191 +1,213 @@
 ﻿@page "/indexed-db"
 
 @using Blazor.IndexedDB.Models.Query
+@using Blazor.IndexedDB.Models.Record
 @using Blazor.IndexedDB.Server.Models
 @using Blazor.IndexedDB.Models
 @implements IDisposable
 @inject IndexedDBManager DbManager
-
-
-<MudStack Row="true">
-    <MudPaper Class="pa-2 ma-2">Status: </MudPaper>
-    <MudPaper Class="pa-2 ma-2">@Message</MudPaper>
-</MudStack>
-<MudStack Row="true">
-    <MudPaper Class="pa-2 ma-2">DB Version: </MudPaper>
-    @*     <MudPaper Class="pa-2 ma-2">@DbManager.CurrentVersion</MudPaper> *@
-
-</MudStack>
-<MudStack Row="true">
-    <MudPaper Class="pa-2 ma-2">Stores: </MudPaper>
-    @*     <MudPaper Class="pa-2 ma-2">@string.Join(", ", DbManager.Stores.Select(s => s.Name))</MudPaper> *@
-</MudStack>
-<MudStack Row="true" Class="pa-2 ma-2" Justify="Justify.SpaceBetween">
-    <MudSelect Class="flex-grow-0" T="IndexedDBDatabase" Value="SelectedDatabase" ValueChanged="SelectedDatabaseChanged" Label="Database" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
-        @foreach (var db in DbManager.DBStore)
-        {
-            <MudSelectItem Value="db">@db.Name</MudSelectItem>
-        }
-    </MudSelect>
-    <MudSelect Class="flex-grow-0" Disabled="SelectedDatabase==null" T="StoreSchema" Value="SelectedStore" ValueChanged="SelectedStoreChanged" Label="Store(Table)" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
-        @foreach (var store in SelectedDatabase?.Stores ?? [])
-        {
-            <MudSelectItem Value="store">@store.Name</MudSelectItem>
-        }
-    </MudSelect>
-    <MudButton OnClick="OpenDatabaseAsync" Variant="Variant.Outlined">Open Database</MudButton>
-    <MudButton Disabled="SelectedDatabase == null || SelectedStore == null" OnClick="GetRecords" Variant="Variant.Outlined">Get Records</MudButton>
-    <MudButton Disabled="SelectedStore == null" OnClick="ClearStore" Variant="Variant.Outlined">Clear Store</MudButton>
-    <MudButton Disabled="SelectedDatabase == null || SelectedStore == null" OnClick="GenerateData" Variant="Variant.Outlined">Generate Data</MudButton>
-    <MudButton Disabled="SelectedDatabase == null" OnClick="DeleteDatabase" Variant="Variant.Outlined">Delete Database</MudButton>
-</MudStack>
-<MudPaper Outlined="true" Class="pa-2 ma-2">
-    <MudText Typo="Typo.h6">Search Records</MudText>
-    <MudStack Row="true" Justify="Justify.FlexStart">
-        <MudStack>
-
-            <MudSwitch Color="Color.Primary" T="bool" Value="PKSearch" ValueChanged="PKSearchSelected">Primary Key Search</MudSwitch>
-            <MudSwitch Color="Color.Primary" @bind-Value="ReturnAll">Return All</MudSwitch>
-
-            <MudSelect Disabled="PKSearch" T="IndexSpec" Value="SelectedIndex" ValueChanged="SelectedIndexChanged" Label="Index" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
-                @foreach (var index in SelectedStore?.Indexes ?? [])
-                {
-                    <MudSelectItem Value="index">@index.Name</MudSelectItem>
-                }
-            </MudSelect>
-            <MudSelect T="string" @bind-Value="SelectedMethod" Label="Method" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
-                @{
-                    var listMethods = PKSearch ? storeMethods : indexMethods;
-                }
-                @foreach (var index in listMethods)
-                {
-                    <MudSelectItem Value="index" />
-                }
-            </MudSelect>
-            <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="SearchForRecords">Search</MudButton>
-        </MudStack>
-        <MudStack>
-            <MudRadioGroup Disabled="ReturnAll" Value="false">
-                <MudStack Row="true">
-                    <MudStack>
-                        <MudText>Simple Query</MudText>
-                        <MudPaper Outlined="true" Class="pa-1">
-                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
-                                <MudStack>
-                                    <MudTextField Label="Search String" Variant="Variant.Outlined" @bind-Value="SearchString" />
-                                </MudStack>
-                            </MudRadio>
-                        </MudPaper>
-                    </MudStack>
-                    <MudStack>
-                        <MudText>Bound Query</MudText>
-                        <MudPaper Outlined="true" Class="pa-1">
-                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
-                                <MudStack>
-                                    <MudTextField Label="Lower" Variant="Variant.Outlined" @bind-Value="SearchString" />
-                                    <MudTextField Label="Upper" Variant="Variant.Outlined" @bind-Value="SearchString" />
-                                    <MudSwitch Color="Color.Primary" Value="false">Exclude Lower</MudSwitch>
-                                    <MudSwitch Color="Color.Primary" Value="false">Exclude Upper</MudSwitch>
-                                </MudStack>
-                            </MudRadio>
-                        </MudPaper>
-                    </MudStack>
-                    <MudStack>
-                        <MudText>Lower Bound Query</MudText>
-                        <MudPaper Outlined="true" Class="pa-1">
-                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
-                                <MudStack>
-                                    <MudTextField Label="Lower" Variant="Variant.Outlined" @bind-Value="SearchString" />
-                                    <MudSwitch Color="Color.Primary" Value="false">Exclude Lower</MudSwitch>
-                                </MudStack>
-                            </MudRadio>
-                        </MudPaper>
-                    </MudStack>
-                    <MudStack>
-                        <MudText>Upper Bound Query</MudText>
-                        <MudPaper Outlined="true" Class="pa-1">
-                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
-                                <MudStack>
-                                    <MudTextField Label="Upper" Variant="Variant.Outlined" @bind-Value="SearchString" />
-                                    <MudSwitch Color="Color.Primary" Value="false">Exclude Upper</MudSwitch>
-                                </MudStack>
-                            </MudRadio>
-                        </MudPaper>
-                    </MudStack>
-                    <MudStack>
-                        <MudText>Only Query</MudText>
-                        <MudPaper Outlined="true" Class="pa-1">
-                            <MudRadio Value="true" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
-                                <MudStack>
-                                    <MudTextField Label="Search String" Variant="Variant.Outlined" @bind-Value="SearchString" />
-                                </MudStack>
-                            </MudRadio>
-                        </MudPaper>
-                    </MudStack>
-                </MudStack>
-            </MudRadioGroup>
-        </MudStack>
+@inject IDialogService DialogService
+<div>
+    <MudStack Row="true">
+        <MudPaper Class="pa-2 ma-2">Status: </MudPaper>
+        <MudPaper Class="pa-2 ma-2">@Message</MudPaper>
+    </MudStack>
+    <MudStack Row="true">
+        <MudPaper Class="pa-2 ma-2">DB Version: </MudPaper>
+        @*     <MudPaper Class="pa-2 ma-2">@DbManager.CurrentVersion</MudPaper> *@
 
     </MudStack>
-</MudPaper>
-<div class="d-flex flex-row align-items-start">
-    <div class="d-flex flex-column">
+    <MudStack Row="true">
+        <MudPaper Class="pa-2 ma-2">Stores: </MudPaper>
+        @*     <MudPaper Class="pa-2 ma-2">@string.Join(", ", DbManager.Stores.Select(s => s.Name))</MudPaper> *@
+    </MudStack>
+    <MudStack Row="true" Class="pa-2 ma-2" Justify="Justify.SpaceBetween">
+        <MudSelect Class="flex-grow-0" T="IndexedDBDatabase" Value="SelectedDatabase" ValueChanged="SelectedDatabaseChanged" Label="Database" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+            @foreach (var db in DbManager.DBStore)
+            {
+                <MudSelectItem Value="db">@db.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect Class="flex-grow-0" Disabled="SelectedDatabase==null" T="IndexedDBStoreSchema" Value="SelectedStore" ValueChanged="SelectedStoreChanged" Label="Store(Table)" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+            @foreach (var store in SelectedDatabase?.Stores ?? [])
+            {
+                <MudSelectItem Value="store">@store.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton OnClick="OpenDatabaseAsync" Variant="Variant.Outlined">Open Database</MudButton>
+        <MudButton Disabled="SelectedDatabase == null || SelectedStore == null" OnClick="GetRecords" Variant="Variant.Outlined">Get Records</MudButton>
+        <MudButton Disabled="SelectedStore == null" OnClick="ClearStore" Variant="Variant.Outlined">Clear Store</MudButton>
+        <MudButton Disabled="SelectedDatabase == null || SelectedStore == null" OnClick="GenerateData" Variant="Variant.Outlined">Generate Data</MudButton>
+        <MudButton Disabled="SelectedDatabase == null" OnClick="DeleteDatabase" Variant="Variant.Outlined">Delete Database</MudButton>
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2 ma-2">
+        <MudText Typo="Typo.h6">Search Records</MudText>
+        <MudStack Row="true" Justify="Justify.FlexStart">
+            <MudStack>
+
+                <MudSwitch Color="Color.Primary" T="bool" Value="PKSearch" ValueChanged="PKSearchSelected">Primary Key Search</MudSwitch>
+                <MudSwitch Color="Color.Primary" @bind-Value="ReturnAll">Return All</MudSwitch>
+                <MudSelect T="string" Value="SelectedSearchValueType" ValueChanged="SelectedSearchValueTypeChanged" Label="Index" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                    @foreach (var searchValue in searchValueAs)
+                    {
+                        <MudSelectItem Value="searchValue">@searchValue</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect Disabled="PKSearch" T="IndexedDBIndex" Value="SelectedIndex" ValueChanged="SelectedIndexChanged" Label="Index" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                    @foreach (var index in SelectedStore?.Indexes ?? [])
+                    {
+                        <MudSelectItem Value="index">@index.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" @bind-Value="SelectedMethod" Label="Method" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                    @{
+                        var listMethods = PKSearch ? storeMethods : indexMethods;
+                    }
+                    @foreach (var index in listMethods)
+                    {
+                        <MudSelectItem Value="index" />
+                    }
+                </MudSelect>
+                <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="SearchForRecords">Search</MudButton>
+            </MudStack>
+            <MudStack>
+                <MudRadioGroup Disabled="ReturnAll" @bind-Value="SelectedQuery">
+                    <MudStack Row="true">
+                        <MudStack>
+                            <MudText>Simple Query</MudText>
+                            <MudPaper Outlined="true" Class="pa-1">
+                                <MudRadio Value="@("Simple")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                    <MudStack>
+                                        <MudTextField Label="Search String" Variant="Variant.Outlined" @bind-Value="SimpleSearchString" />
+                                    </MudStack>
+                                </MudRadio>
+                            </MudPaper>
+                        </MudStack>
+                        <MudStack>
+                            <MudText>Bound Query</MudText>
+                            <MudPaper Outlined="true" Class="pa-1">
+                                <MudRadio Value="@("Bound")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                    <MudStack>
+                                        <MudTextField Label="Lower" Variant="Variant.Outlined" @bind-Value="BoundLowerString" />
+                                        <MudTextField Label="Upper" Variant="Variant.Outlined" @bind-Value="BoundUpperString" />
+                                        <MudSwitch Color="Color.Primary" @bind-Value="BoundExcludeLower">Exclude Lower</MudSwitch>
+                                        <MudSwitch Color="Color.Primary" @bind-Value="BoundExcludeUpper">Exclude Upper</MudSwitch>
+                                    </MudStack>
+                                </MudRadio>
+                            </MudPaper>
+                        </MudStack>
+                        <MudStack>
+                            <MudText>Lower Bound Query</MudText>
+                            <MudPaper Outlined="true" Class="pa-1">
+                                <MudRadio Value="@("Lower")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                    <MudStack>
+                                        <MudTextField Label="Lower" Variant="Variant.Outlined" @bind-Value="LowerSearchString" />
+                                        <MudSwitch Color="Color.Primary" @bind-Value="LowerExcludeLower">Exclude Lower</MudSwitch>
+                                    </MudStack>
+                                </MudRadio>
+                            </MudPaper>
+                        </MudStack>
+                        <MudStack>
+                            <MudText>Upper Bound Query</MudText>
+                            <MudPaper Outlined="true" Class="pa-1">
+                                <MudRadio Value="@("Upper")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                    <MudStack>
+                                        <MudTextField Label="Upper" Variant="Variant.Outlined" @bind-Value="UpperSearchString" />
+                                        <MudSwitch Color="Color.Primary" @bind-Value="UpperExcludeUpper">Exclude Upper</MudSwitch>
+                                    </MudStack>
+                                </MudRadio>
+                            </MudPaper>
+                        </MudStack>
+                        <MudStack>
+                            <MudText>Only Query</MudText>
+                            <MudPaper Outlined="true" Class="pa-1">
+                                <MudRadio Value="@("Only")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                                    <MudStack>
+                                        <MudTextField Label="Search String" Variant="Variant.Outlined" @bind-Value="OnlyQuerySearchString" />
+                                    </MudStack>
+                                </MudRadio>
+                            </MudPaper>
+                        </MudStack>
+                    </MudStack>
+                </MudRadioGroup>
+            </MudStack>
+
+        </MudStack>
+    </MudPaper>
+    @if (SelectedStore?.Name == "Employees")
+    {
+        <PeopleTable People="@People" DialogService="@DialogService" DbManager="@DbManager" />
+    }
+
+    @if (SelectedStore?.Name == "Vehicles" && Vehicles.Count > 0)
+    {
+        <MudTable T="Vehicle" Dense="true" Height="500px" Items="@Vehicles" Hover="true" Breakpoint="Breakpoint.Sm" LoadingProgressColor="Color.Info" FixedHeader="true">
+            <HeaderContent>
+                <MudTh>Id</MudTh>
+                <MudTh>Make</MudTh>
+                <MudTh>Model</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Fuel</MudTh>
+                <MudTh>Year</MudTh>
+                <MudTh>VIN</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nr">@context.Id</MudTd>
+                <MudTd DataLabel="Make">@context.Make</MudTd>
+                <MudTd DataLabel="Model">@context.Model</MudTd>
+                <MudTd DataLabel="Type">@context.Type</MudTd>
+                <MudTd DataLabel="Fuel">@context.FuelType</MudTd>
+                <MudTd DataLabel="Year">@context.ReleaseYear</MudTd>
+                <MudTd DataLabel="VIN">@context.Vin</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+
+    <div class="d-flex flex-row align-items-start">
+        <div class="d-flex flex-column">
 
 
-        <div class="m-4 d-flex flex-row">
-            <button class="btn btn-outline-primary mr-2" @onclick="AddNewStore">Add New Store</button>
-            <input type="text" placeholder="Enter new store name" @bind="NewStoreName" />
+            <div class="m-4 d-flex flex-row">
+                <button class="btn btn-outline-primary mr-2" @onclick="AddNewStore">Add New Store</button>
+                <input type="text" placeholder="Enter new store name" @bind="NewStoreName" />
+            </div>
+
         </div>
-
-    </div>
-
-    <div class="d-flex, flex-column">
-        <div class="m-4 border d-flex flex-column">
-            <div class="m-4">
-                <label>First Name</label> <input id="firstName" type="text" @bind="@CurrentPerson.FirstName" />
-            </div>
-            <div class="m-4">
-                <label>Last Name</label> <input id="lastName" type="text" @bind="@CurrentPerson.LastName" />
-            </div>
-
-            <button class="btn btn-primary m-4" @onclick="AddRecord">Add/Update Record</button>
-        </div>
-    </div>
-
-    <div class="d-flex flex-row flex-wrap mt-4">
-
-        @foreach (var person in People)
-        {
-
-            <div class="card" style="margin-bottom:10px; margin-right: 10px; padding:5px; width:200px">
-                <p>Id: @person.Id</p>
-                <p>First Name: @person.FirstName</p>
-                <p>Last Name: @person.LastName</p>
-                <div>
-                    <button class="btn btn-outline-primary" @onclick="(() => EditPerson(person.Id))">Edit</button>
-                    <button class="btn btn-outline-warning" @onclick="(() => DeleteRecord(person.Id))">Delete</button>
-                </div>
-            </div>
-
-        }
-
     </div>
 </div>
-
 @code {
     // [Inject]
     // public required IndexedDBDatabase DbStore { get; set; }
     // @inject DbStore DbStore
 
 
-    List<string> indexMethods = ["one", "two", "three"];
-    List<string> storeMethods = ["a", "b", "c"];
+    List<string> indexMethods = ["iterateRecordsByIndex", "getRecordByIndex", "getAllRecordsByIndexQuery", "getAllRecordsByIndex", "getAllKeysByIndex", "getKeyByIndex"];
+    List<string> storeMethods = ["iterateRecords", "getRecord", "getAllRecords", "getAllRecordsByQuery", "getAllKeys", "getKey"];
+    List<string> searchValueAs = ["string", "number", "datetime", "datetimeoffset", "arrayofstring", "arrayofnumbers", "arrayofdatetime", "arrayofdatetimeoffset", "arrayofbytes"];
     string SelectedMethod { get; set; } = string.Empty;
+    string SelectedQuery { get; set; } = string.Empty;
+    string SelectedSearchValueType { get; set; } = "string";
     bool PKSearch { get; set; } = true;
     bool ReturnAll { get; set; } = false;
+    // int SelectedRowNumber { get; set; } = -1;
     IndexedDBDatabase? SelectedDatabase { get; set; }
-    StoreSchema? SelectedStore { get; set; }
-    IndexSpec? SelectedIndex { get; set; }
+    IndexedDBStoreSchema? SelectedStore { get; set; }
+    IndexedDBIndex? SelectedIndex { get; set; }
+    IndexedDBRecord<List<Person>>? People { get; set; }
+    List<Vehicle> Vehicles { get; set; } = new();
+    Vehicle? CurrentVehicle { get; set; }
+
+    string SimpleSearchString { get; set; } = string.Empty;
+    string BoundLowerString { get; set; } = string.Empty;
+    string BoundUpperString { get; set; } = string.Empty;
+    bool BoundExcludeLower { get; set; }
+    bool BoundExcludeUpper { get; set; }
+    string LowerSearchString { get; set; } = string.Empty;
+    bool LowerExcludeLower { get; set; }
+    string UpperSearchString { get; set; } = string.Empty;
+    bool UpperExcludeUpper { get; set; }
+    string OnlyQuerySearchString { get; set; } = string.Empty;
+
 
     void SelectedDatabaseChanged(IndexedDBDatabase selected)
     {
@@ -197,14 +219,19 @@
         SelectedDatabase = selected;
     }
 
-    void SelectedStoreChanged(StoreSchema selected)
+    void SelectedStoreChanged(IndexedDBStoreSchema selected)
     {
         SelectedStore = selected;
     }
 
-    void SelectedIndexChanged(IndexSpec selected)
+    void SelectedIndexChanged(IndexedDBIndex selected)
     {
         SelectedIndex = selected;
+    }
+
+    void SelectedSearchValueTypeChanged(string selected)
+    {
+        SelectedSearchValueType = selected;
     }
 
 
@@ -229,34 +256,33 @@
             var num = Random.Shared.Next(100, 200);
             for (var i = 0; i < num; i++)
             {
-                await DbManager.AddRecord<Person>(SelectedDatabase, new StoreRecord<Person>
+                await DbManager.AddRecord<Person>(new IndexedDBRecord<Person>
                     {
+                        DatabaseName = SelectedDatabase.Name,
                         StoreName = SelectedStore.Name,
                         Data = new()
-                    });
+                    }.ToAction());
             }
         }
         else
         {
-            var num = Random.Shared.Next(1, 100);
+            var num = Random.Shared.Next(100, 200);
             for (var i = 0; i < num; i++)
             {
-                await DbManager.AddRecord<Vehicle>(SelectedDatabase, new StoreRecord<Vehicle>
+                await DbManager.AddRecord<Vehicle>(new IndexedDBRecord<Vehicle>
                     {
+                        DatabaseName = SelectedDatabase.Name,
                         StoreName = SelectedStore.Name,
                         Data = new()
-                    });
+                    }.ToAction());
             }
         }
     }
 
 
     string Message { get; set; } = string.Empty;
-    Person CurrentPerson { get; set; } = new Person();
-    List<Person> People { get; set; } = new();
     string NewStoreName { get; set; } = "";
     List<string> Indexes { get; set; } = new();
-    string SearchString { get; set; } = string.Empty;
     bool GetAll { get; set; }
 
     protected override void OnInitialized()
@@ -295,89 +321,49 @@
         {
             return;
         }
-        var results = await DbManager.GetAllRecords<Person>(SelectedDatabase, new(SelectedStore.Name, "", IndexedDBQuery.ValidKeyQuery("")));
-
-        if (results != null && results.Data != null && results.Data.Any())
+        if (SelectedStore.Name == "Employees")
         {
-            People = results.Data.ToList();
+            var results = await DbManager.GetAllRecords<Person>(new(IndexedDBQueryCreator.ValidKeyQuery("")) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+
+            if (results != null && results.Result.Data != null && results.Result.Data.Any())
+            {
+                People = results.Result;
+            }
+            else
+            {
+                People = null;
+                Message = "No Records found";
+            }
         }
         else
         {
-            People.Clear();
-            Message = "No Records found";
+            var results = await DbManager.GetAllRecords<Vehicle>(new(IndexedDBQueryCreator.ValidKeyQuery("")) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+            if (results != null && results.Result.Data != null && results.Result.Data.Any())
+            {
+                Vehicles = results.Result.Data.ToList();
+            }
+            else
+            {
+                Vehicles.Clear();
+                Message = "No Records found";
+            }
         }
 
         StateHasChanged();
     }
 
-    protected async Task EditPerson(long? id)
-    {
-        var db = DbManager.DBStore.First();
-
-        try
-        {
-            if (id is null)
-            {
-                return;
-            }
-            var resultById = await DbManager.GetRecordById<long, Person>
-               (db, db.Stores[0].Name, id.Value);
-            if (resultById is not null && resultById.Data is not null)
-                CurrentPerson = resultById.Data;
-        }
-        catch (Exception e)
-        {
-
-            Console.WriteLine(e.Message);
-        }
-    }
-
-    protected async void AddRecord()
-    {
-        var db = DbManager.DBStore.First();
-        var newRecord = new StoreRecord<Person>
-            {
-                StoreName = DbManager.DBStore.First().Stores[0].Name,
-                Data = CurrentPerson
-            };
-
-
-        if (newRecord.Data.Id.HasValue)
-        {
-            await DbManager.UpdateRecord(db, newRecord);
-        }
-        else
-        {
-
-            var result = await DbManager.AddRecord(db, newRecord);
-            if (result is not null && result.Data != null)
-                People.Add(result.Data);
-        }
 
 
 
-        CurrentPerson = new Person();
-
-        // GetRecords();
-    }
-
-    protected async Task DeleteRecord(long? id)
-    {
-        var db = DbManager.DBStore.First();
-        var query = new IDBValidKeyQuery<object>(id);
-        await DbManager.DeleteRecordByKey(db, db.Stores[0].Name, query);
-
-        GetRecords();
-    }
 
     protected async Task AddNewStore()
     {
         var db = DbManager.DBStore.First();
 
-        var newStoreSchema = new StoreSchema
+        var newStoreSchema = new IndexedDBStoreSchema
             {
                 Name = NewStoreName,
-                PrimaryKey = new IndexSpec { Name = "id", KeyPath = ["id"], Auto = true },
+                PrimaryKey = new IndexedDBIndex { Name = "id", KeyPath = ["id"], Auto = true },
             };
 
         await DbManager.AddNewStore(db, newStoreSchema);
@@ -402,46 +388,91 @@
         }
 
         await DbManager.DeleteDb(SelectedDatabase);
-        People.Clear();
+        People = null;
     }
 
     private void OnIndexedDbNotification(object? sender, IndexedDBNotificationEvent args)
     {
         Message = args.Message;
     }
+
+    private object GetConvertedValue(string value)
+    {
+        object convertedValue = value;
+
+        switch(SelectedSearchValueType)
+        {
+            case "number":
+                convertedValue = long.Parse(value);
+                break;
+            case "datetime":
+                convertedValue = DateTime.Parse(value);
+                break;
+            case "datetimeoffset":
+                convertedValue = DateTimeOffset.Parse(value);
+                break;
+            case "arrayofstring":
+                convertedValue = value.Split(',');
+                break;
+            case "arrayofnumbers":
+                convertedValue = value.Split(',').Select(long.Parse).ToArray();
+                break;
+            case "arrayofdatetime":
+                convertedValue = value.Split(',').Select(DateTime.Parse).ToArray();
+                break;
+            case "arrayofdatetimeoffset":
+                convertedValue = value.Split(',').Select(DateTimeOffset.Parse).ToArray();
+                break;
+            case "arrayofbytes":
+                convertedValue = value.Split(',').Select(byte.Parse).ToArray();
+                break;
+        }
+        return convertedValue;
+    }
+
     protected async Task SearchForRecords()
     {
-        var db = DbManager.DBStore.First();
-
-        if (string.IsNullOrEmpty(SelectedIndex?.Name))
+        if (SelectedDatabase == null || SelectedStore == null)
         {
             return;
         }
-
-        People.Clear();
-
-        var indexSearch = new IndexedDBSearch(DbManager.DBStore.First().Stores[0].Name, SelectedIndex.Name, IndexedDBQuery.ValidKeyQuery(SearchString));
-
-        if (GetAll)
+        IIndexedDBQuery? queryValue = null;
+        IndexedDBQuery? query = null;
+        if (SelectedQuery == "Simple")
         {
-            var result = await DbManager.GetAllRecordsByIndex<Person>(db, indexSearch);
+            queryValue = new IndexedDBQueryValidKey<object>(GetConvertedValue(SimpleSearchString));
+        }
+        if (SelectedQuery == "Bound")
+        {
+            queryValue = new IndexedDBQueryBound(GetConvertedValue(BoundLowerString), GetConvertedValue(BoundUpperString), BoundExcludeLower, BoundExcludeUpper);
+        }
+        if (SelectedQuery == "Lower")
+        {
+            queryValue = new IndexedDBQueryLowerBound(GetConvertedValue(LowerSearchString), LowerExcludeLower);
+        }
+        if (SelectedQuery == "Upper")
+        {
+            queryValue = new IndexedDBQueryLowerBound(GetConvertedValue(UpperSearchString), UpperExcludeUpper);
+        }
+        if (SelectedQuery == "Only")
+        {
+            queryValue = new IndexedDBQueryOnly(GetConvertedValue(OnlyQuerySearchString));
+        }
+        if (queryValue == null) return;
 
-            if (result is null)
-            {
-                return;
-            }
-            People.AddRange(result.Data ?? []);
+        if (SelectedIndex == null)
+        {
 
+            query = new IndexedDBQuery(queryValue) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name };
         }
         else
         {
-            var result = await DbManager.GetRecordByIndex<string, Person>(db, indexSearch);
+            query = new IndexedDBIndexQuery(SelectedIndex.Name, queryValue) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name };
 
-            if (result is null || result.Data is null)
-            {
-                return;
-            }
-            People.Add(result.Data);
         }
+
+        if (query == null) return;
+        await DbManager.CallJavaScriptDebug<object>(SelectedMethod, query);
+
     }
 }

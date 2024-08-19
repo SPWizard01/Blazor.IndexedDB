@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using Blazor.IndexedDB.Models.Record;
+using System.Text.Json.Serialization;
 
 namespace Blazor.IndexedDB.Models.JS
 {
@@ -6,8 +7,8 @@ namespace Blazor.IndexedDB.Models.JS
     {
         [JsonPropertyName("success")]
         public bool Success { get; set; }
-        [JsonPropertyName("data")]
-        public T? Data { get; set; }
+        [JsonPropertyName("result")]
+        public IndexedDBRecord<T> Result { get; set; }
         [JsonPropertyName("message")]
         public string Message { get; set; } = string.Empty;
         [JsonPropertyName("type")]

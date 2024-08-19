@@ -43,11 +43,6 @@
   </ItemGroup>
 
 
-  <ItemGroup>
-    <Folder Include="client\" />
-  </ItemGroup>
-
-
   <Target Name="EnsureNpmRestored" Inputs="@(ClientLibInputs)" Outputs="@(PackageJSONInputs)">
     <Message Importance="high" Text="Restoring dependencies using 'npm'. This may take several minutes..." />
     <Exec Command="npm install" />

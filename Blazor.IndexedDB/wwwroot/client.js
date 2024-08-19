@@ -282,8 +282,9 @@ var IndexedDbManager = class {
               let blockingInstance = this.getInstance(dbStore.name);
               ;
               blockingInstance?.instance.close();
+              const baseInfo = { databaseName: dbStore.name, storeName: "" };
               dbOpenOutcomes.push(
-                this.getSuccessResult(message, void 0, "DatabaseUpgradeBlocking")
+                this.getSuccessResult(message, void 0, baseInfo, "DatabaseUpgradeBlocking")
               );
             } catch (e) {
               const message2 = `Could not close db, will try again. ${e}`;
@@ -331,294 +332,313 @@ var IndexedDbManager = class {
         version: instance.version,
         storeNames: this.getStoreNames(instance.objectStoreNames)
       };
-      return this.getSuccessResult("Database information retrieved", dbInfo);
+      return this.getSuccessResult("Database information retrieved", dbInfo, { databaseName: instance.name, storeName: "" });
     } catch (e) {
       return this.getFailureResult(`Error getting database information: ${e}`);
     }
   }
-  async deleteDb(dbName) {
+  async deleteDb(databaseName) {
     try {
-      const db = this.getInstance(dbName);
+      const db = this.getInstance(databaseName);
       db?.instance.close();
-      await deleteDB(dbName);
+      await deleteDB(databaseName);
       if (db) {
         this.instances.splice(this.instances.indexOf(db), 1);
       }
-      const msg = `The database ${dbName} has been deleted.`;
-      return this.getSuccessResult(msg, void 0);
+      const msg = `The database ${databaseName} has been deleted.`;
+      return this.getSuccessResult(msg, void 0, { databaseName, storeName: "" });
     } catch (e) {
       return this.getFailureResult(`Error deleting database: ${e}`);
     }
   }
   //#region CRUD
-  async addRecord(dbName, record) {
-    const stName = record.storeName;
+  async addRecord(record) {
     let itemToSave = record.data;
     try {
-      const tx = this.getTransaction(dbName, stName, "readwrite");
-      const objectStore = tx.objectStore(stName);
+      const { tx, objectStore, idbKeyResult } = this.getStoreQuery(record, "readwrite");
       itemToSave = this.removePrimaryKeyPropertyIfAutoIncrement(objectStore, itemToSave);
       if (!objectStore.add) {
         return this.getFailureResult("Add method not available on object store");
       }
-      console.log(itemToSave);
-      const result = await objectStore.add(itemToSave);
+      let key = void 0;
+      if (!idbKeyResult.success && record.useKey) {
+        return this.getFailureResult("Unable to update record, key not valid");
+      }
+      if (idbKeyResult.success && record.useKey) {
+        key = idbKeyResult.result.data.value;
+      }
+      const result = await objectStore.add(itemToSave, key);
       const dbResult = await objectStore.get(result);
       await tx.done;
       const msg = `Added new record with id ${result}`;
-      return this.getSuccessResult(msg, dbResult);
+      return this.getSuccessResult(msg, dbResult, record);
     } catch (e) {
       return this.getFailureResult(`Error adding record: ${e}`);
     }
   }
-  async updateRecord(dbName, record) {
-    const stName = record.storeName;
+  async updateRecord(record) {
     try {
-      const tx = this.getTransaction(dbName, stName, "readwrite");
-      const objectStore = tx.objectStore(stName);
+      const { tx, idbKeyResult, objectStore } = this.getStoreQuery(record, "readwrite");
       if (!objectStore.put) {
         return this.getFailureResult("Put method not available on object store");
       }
-      const result = await objectStore.put(record.data, record.key);
+      let key = void 0;
+      if (!idbKeyResult.success && record.useKey) {
+        return this.getFailureResult("Unable to update record, key not valid");
+      }
+      if (idbKeyResult.success && record.useKey) {
+        key = idbKeyResult.result.data.value;
+      }
+      const result = await objectStore.put(record.data, key);
       const dbResult = await objectStore.get(result);
       await tx.done;
       const msg = `Updated record with id ${result}`;
-      return this.getSuccessResult(msg, dbResult);
+      return this.getSuccessResult(msg, dbResult, record);
     } catch (e) {
       return this.getFailureResult(`Error updating record: ${e}`);
     }
   }
-  async deleteRecordByQuery(dbName, query) {
+  async deleteRecordByQuery(query) {
     try {
-      const { tx, objectStore, idbKeyResult } = this.getStoreQuery(dbName, query, "readwrite");
+      const { tx, objectStore, idbKeyResult } = this.getStoreQuery(query, "readwrite");
       if (!objectStore.delete) {
         return this.getFailureResult("delete method not available on object store");
       }
       if (!idbKeyResult.success) {
         return this.getFailureResult(`Error deleting record: ${idbKeyResult.message}`);
       }
-      await objectStore.delete(idbKeyResult.data.value);
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`Error deleting record: NoQuery is not a valid query`);
+      }
+      await objectStore.delete(idbKeyResult.result.data.value);
       await tx.done;
-      return this.getSuccessResult(`Deleted records from store ${query.storeName}`, void 0);
+      return this.getSuccessResult(`Deleted records from store ${query.storeName}`, void 0, query);
     } catch (e) {
       return this.getFailureResult(`Error deleting record: ${e}`);
     }
   }
-  async deleteRecordByKey(dbName, storename, id) {
+  async deleteRecordByKey(record) {
     try {
-      const tx = this.getTransaction(dbName, storename, "readwrite");
-      const objectStore = tx.objectStore(storename);
+      if (!record.queryValue) {
+        return this.getFailureResult("Key is required to delete record");
+      }
+      const { tx, idbKeyResult, objectStore } = this.getStoreQuery(record, "readwrite");
+      if (!objectStore.put) {
+        return this.getFailureResult("Put method not available on object store");
+      }
+      if (!idbKeyResult.success) {
+        return this.getFailureResult("Unable to delete record, key not valid");
+      }
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`Error deleting record: NoQuery is not a valid query`);
+      }
       if (!objectStore.delete) {
         return this.getFailureResult("delete method not available on object store");
       }
-      await objectStore.delete(id);
-      return this.getSuccessResult(`Deleted record with key ${id} from store ${storename}`, void 0);
+      await objectStore.delete(idbKeyResult.result.data.value);
+      await tx.done;
+      return this.getSuccessResult(`Deleted record(s) from store ${record.storeName}`, void 0, record);
     } catch (e) {
       return this.getFailureResult(`Error deleting record: ${e}`);
     }
   }
-  async clearStore(dbName, storeName) {
+  async clearStore(record) {
     try {
-      const tx = this.getTransaction(dbName, storeName, "readwrite");
-      await tx.objectStore(storeName).clear?.();
+      const tx = this.getTransaction(record, "readwrite");
+      await tx.objectStore(record.storeName).clear?.();
       await tx.done;
-      return this.getSuccessResult(`Store ${storeName} cleared`, void 0);
+      return this.getSuccessResult(`Store ${record.storeName} cleared`, void 0, record);
     } catch (e) {
-      return this.getFailureResult(`Error clearing store ${storeName}: ${e}`);
+      return this.getFailureResult(`Error clearing store ${record.storeName}: ${e}`);
     }
   }
   //#endregion
   //#region IndexQueries
-  async iterateRecordsByIndex(dbName, searchData, direction) {
+  async iterateRecordsByIndex(searchData, direction) {
     try {
-      const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
       const results = [];
-      const recordIterator = index.iterate(idbKeyResult.data.value, direction);
+      const recordIterator = index.iterate(idbKeyResult.result.data.value, direction);
       for await (const cursor of recordIterator) {
         results.push(cursor.value);
       }
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
     }
   }
-  async getRecordByIndex(dbName, searchData) {
+  async getRecordByIndex(searchData) {
     try {
-      const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
-      const results = await index.get(idbKeyResult.data.value);
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`Error deleting record: NoQuery is not a valid query`);
+      }
+      const results = await index.get(idbKeyResult.result.data.value);
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
     }
   }
-  async getAllRecordsByIndexQuery(dbName, searchData, count) {
+  async getAllRecordsByIndexQuery(searchData, count) {
     try {
-      const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
-      const results = await index.getAll(idbKeyResult.data.value, count);
+      const results = await index.getAll(idbKeyResult.result.data.value, count !== -1 ? count : void 0);
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
     }
   }
-  async getAllRecordsByIndex(dbName, searchData) {
+  async getAllRecordsByIndex(searchData) {
     try {
-      const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
       const results = await index.getAll();
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
     }
   }
-  async getAllKeysByIndex(dbName, searchData, count) {
+  async getAllKeysByIndex(searchData, count) {
     try {
-      const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
-      const results = await index.getAllKeys(idbKeyResult.data.value, count);
+      const results = await index.getAllKeys(idbKeyResult.result.data.value, count !== -1 ? count : void 0);
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
     }
   }
-  async getKeyByIndex(dbName, searchData) {
+  async getKeyByIndex(searchData) {
     try {
-      const { index, tx, idbKeyResult } = this.getIndexQuery(dbName, searchData, "readonly");
+      const { index, tx, idbKeyResult } = this.getIndexQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
-      const results = await index.getKey(idbKeyResult.data.value);
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`Error deleting record: NoQuery is not a valid query`);
+      }
+      const results = await index.getKey(idbKeyResult.result.data.value);
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.indexName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName} index ${searchData.indexName}: ${e}`);
     }
   }
   //#endregion
   //#region StoreRecordQueries
-  async iterateRecords(dbName, searchData, direction) {
+  async iterateRecords(searchData, direction) {
     try {
-      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
       const results = [];
-      const recordIterator = objectStore.iterate(idbKeyResult.data.value, direction);
+      const recordIterator = objectStore.iterate(idbKeyResult.result.data.value, direction);
       for await (const cursor of recordIterator) {
         results.push(cursor.value);
       }
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
     }
   }
-  async *iterateAsyncRecords(dbName, searchData, direction) {
-    console.log("Iterating async records");
+  async getRecord(searchData) {
     try {
-      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
-      const results = [];
-      const recordIterator = objectStore.iterate(idbKeyResult.data.value, direction);
-      for await (const cursor of recordIterator) {
-        yield this.getSuccessResult(`Record retrieved from index ${searchData.storeName}`, results);
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`NoQuery is not a valid query`);
       }
+      const results = await objectStore.get(idbKeyResult.result.data.value);
       await tx.done;
-    } catch (e) {
-      return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
-    }
-  }
-  async getRecord(dbName, searchData) {
-    try {
-      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
-      if (!idbKeyResult.success) {
-        return idbKeyResult;
-      }
-      const results = await objectStore.get(idbKeyResult.data.value);
-      await tx.done;
-      return this.getSuccessResult(`Records retrieved from table ${searchData.storeName}`, results);
+      return this.getSuccessResult(`Records retrieved from table ${searchData.storeName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records table ${searchData.storeName}: ${e}`);
     }
   }
-  async getAllRecords(dbName, searchData) {
+  async getAllRecords(searchData) {
     try {
-      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
       const results = await objectStore.getAll();
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
     }
   }
-  async getAllRecordsByQuery(dbName, searchData, count) {
+  async getAllRecordsByQuery(searchData, count) {
     try {
-      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
-      const results = await objectStore.getAll(idbKeyResult.data.value, count);
+      const results = await objectStore.getAll(idbKeyResult.result.data.value, count !== -1 ? count : void 0);
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
     }
   }
-  async getAllKeys(dbName, searchData, count) {
+  async getAllKeys(searchData, count) {
     try {
-      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
-      const results = await objectStore.getAllKeys(idbKeyResult.data.value, count);
+      const results = await objectStore.getAllKeys(idbKeyResult.result.data.value, count !== -1 ? count : void 0);
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
     }
   }
-  async getKey(dbName, searchData) {
+  async getKey(searchData) {
     try {
-      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, "readonly");
+      const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, "readonly");
       if (!idbKeyResult.success) {
         return idbKeyResult;
       }
-      const results = await objectStore.getKey(idbKeyResult.data.value);
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`Error deleting record: NoQuery is not a valid query`);
+      }
+      const results = await objectStore.getKey(idbKeyResult.result.data.value);
       await tx.done;
-      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results);
+      return this.getSuccessResult(`Records retrieved from index ${searchData.storeName}`, results, searchData);
     } catch (e) {
       return this.getFailureResult(`Error getting records from ${searchData.storeName}: ${e}`);
     }
   }
   //#endregion
-  getIDBKey(query) {
+  getIDBKey(incommingQuery) {
     let result;
-    console.log(query);
+    const query = incommingQuery.queryValue;
     switch (query.queryType) {
       case "BoundQuery":
-        result = { type: "KeyRange", value: IDBKeyRange.bound(query.lowerBound, query.upperBound, query.lowerOpen, query.upperOpen) };
+        result = { type: "KeyRange", value: IDBKeyRange.bound(query.lower, query.upper, query.lowerOpen, query.upperOpen) };
         break;
       case "LowerBoundQuery":
         result = { type: "KeyRange", value: IDBKeyRange.lowerBound(query.lowerBound, query.lowerOpen) };
@@ -632,25 +652,28 @@ var IndexedDbManager = class {
       case "ValidKeyQuery":
         result = { type: "ValidKey", value: query.value };
         break;
+      case "NoQuery":
+        result = { type: "NoQuery", value: void 0 };
+        break;
       default:
         return this.getFailureResult(`Invalid query type ${query.queryType}`);
     }
-    return this.getSuccessResult("IDBKey created", result);
+    return this.getSuccessResult("IDBKey created", result, incommingQuery);
   }
-  getIndexQuery(dbName, searchData, transactionMode) {
-    const { objectStore, tx, idbKeyResult } = this.getStoreQuery(dbName, searchData, transactionMode);
+  getIndexQuery(searchData, transactionMode) {
+    const { objectStore, tx, idbKeyResult } = this.getStoreQuery(searchData, transactionMode);
     const index = objectStore.index(searchData.indexName);
-    return { index, tx, idbKeyResult };
+    return { index, tx, idbKeyResult, objectStore };
   }
-  getStoreQuery(dbName, searchData, transactionMode) {
-    const tx = this.getTransaction(dbName, searchData.storeName, transactionMode);
+  getStoreQuery(searchData, transactionMode) {
+    const tx = this.getTransaction(searchData, transactionMode);
     const objectStore = tx.objectStore(searchData.storeName);
-    const idbKeyResult = this.getIDBKey(searchData.queryValue);
+    const idbKeyResult = this.getIDBKey(searchData);
     return { objectStore, tx, idbKeyResult };
   }
-  getTransaction(dbName, stName, mode) {
-    const db = this.getInstance(dbName);
-    const tx = db.instance.transaction(stName, mode);
+  getTransaction(searchData, mode) {
+    const db = this.getInstance(searchData.databaseName);
+    const tx = db.instance.transaction(searchData.storeName, mode);
     return tx;
   }
   removePrimaryKeyPropertyIfAutoIncrement(objectStore, data) {
@@ -732,7 +755,8 @@ var IndexedDbManager = class {
     const primaryKeyPath = primaryKey.keyPath.length == 1 ? primaryKey.keyPath[0] : primaryKey.keyPath;
     try {
       const newStore = upgradeDB.createObjectStore(store.name, { keyPath: primaryKeyPath, autoIncrement: primaryKey.auto });
-      storeOutcomes.push(this.getSuccessResult(`Store ${store.name} created inside ${upgradeDB.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`, void 0, "TableCreated"));
+      const baseInfo = { databaseName: upgradeDB.name, storeName: store.name };
+      storeOutcomes.push(this.getSuccessResult(`Store ${store.name} created inside ${upgradeDB.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`, void 0, baseInfo, "TableCreated"));
       for (var index of store.indexes) {
         storeOutcomes.push(this.createIndexForStore(index, newStore, oldVersion, newVersion));
       }
@@ -758,12 +782,16 @@ var IndexedDbManager = class {
       return this.getFailureResult(`Error creating index ${index.name} for store ${newStore.name}: ${e}`, "IndexCreationError");
     }
     const message = `Index ${index.name} created inside ${newStore.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`;
-    return this.getSuccessResult(message, void 0, "IndexCreated");
+    return this.getSuccessResult(message, void 0, { databaseName: "", storeName: newStore.name }, "IndexCreated");
   }
-  getSuccessResult(successMessage, data, type) {
+  getSuccessResult(successMessage, data, requestBase, type) {
     const result = {
       success: true,
-      data,
+      result: {
+        data,
+        databaseName: requestBase.databaseName,
+        storeName: requestBase.storeName
+      },
       message: successMessage,
       type
     };

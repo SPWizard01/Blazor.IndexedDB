@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Blazor.IndexedDB.Models.Query
+﻿namespace Blazor.IndexedDB.Models.Query
 {
 
     public sealed class IndexedDBQueryCreator
@@ -25,68 +23,9 @@ namespace Blazor.IndexedDB.Models.Query
             return new IndexedDBQueryOnly(value);
         }
 
-
-
-
-
-
-        public static IndexedDBQueryValidKey<string> ValidKeyQuery(string value)
+        public static IndexedDBQueryValidKey ValidKeyQuery(object value)
         {
-            return new IndexedDBQueryValidKey<string>(value);
-        }
-        public static IndexedDBQueryValidKey<int> ValidKeyQuery(int value)
-        {
-            return new IndexedDBQueryValidKey<int>(value);
-        }
-        public static IndexedDBQueryValidKey<long> ValidKeyQuery(long value)
-        {
-            return new IndexedDBQueryValidKey<long>(value);
-        }
-        public static IndexedDBQueryValidKey<object> ValidKeyQuery(object value)
-        {
-            return new IndexedDBQueryValidKey<object>(value);
-        }
-        public static IndexedDBQueryValidKey<DateTime> ValidKeyQuery(DateTime value)
-        {
-            return new IndexedDBQueryValidKey<DateTime>(value);
-        }
-        public static IndexedDBQueryValidKey<DateTimeOffset> ValidKeyQuery(DateTimeOffset value)
-        {
-            return new IndexedDBQueryValidKey<DateTimeOffset>(value);
-        }
-        public static IndexedDBQueryValidKey<byte[]> ValidKeyQuery(byte[] value)
-        {
-            return new IndexedDBQueryValidKey<byte[]>(value);
-        }
-
-
-        public static IndexedDBQueryValidKey<string[]> ValidKeyQuery(string[] value)
-        {
-            return new IndexedDBQueryValidKey<string[]>(value);
-        }
-        public static IndexedDBQueryValidKey<int[]> ValidKeyQuery(int[] value)
-        {
-            return new IndexedDBQueryValidKey<int[]>(value);
-        }
-        public static IndexedDBQueryValidKey<long[]> ValidKeyQuery(long[] value)
-        {
-            return new IndexedDBQueryValidKey<long[]>(value);
-        }
-        public static IndexedDBQueryValidKey<object[]> ValidKeyQuery(object[] value)
-        {
-            return new IndexedDBQueryValidKey<object[]>(value);
-        }
-        public static IndexedDBQueryValidKey<DateTime[]> ValidKeyQuery(DateTime[] value)
-        {
-            return new IndexedDBQueryValidKey<DateTime[]>(value);
-        }
-        public static IndexedDBQueryValidKey<DateTimeOffset[]> ValidKeyQuery(DateTimeOffset[] value)
-        {
-            return new IndexedDBQueryValidKey<DateTimeOffset[]>(value);
-        }
-        public static IndexedDBQueryValidKey<byte[][]> ValidKeyQuery(byte[][] value)
-        {
-            return new IndexedDBQueryValidKey<byte[][]>(value);
+            return new IndexedDBQueryValidKey(value);
         }
     }
 }

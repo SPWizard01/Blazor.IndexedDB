@@ -1,9 +1,21 @@
 import { IndexedDBRecordBase } from "./record";
 
+export type IndexedDBGenericErrorResultType = "MultiEntryIndexWithMultipleKeyPaths" | "IndexKeyPathMismatch" | "SchemaVerificationError";
+
+export type IndexedDBDatabaseActionResultType = "DatabaseOpenError" | "DatabaseUpgradeBlocked" | "DatabaseUpgradeBlocking" | "DatabaseInfo" | "DatabaseInfoError" | "DatabaseDeleted" | "DatabaseDeleteError";
+export type IndexedDBStoreActionResultType = "StoreNotFound" | "StoreCreationError" | "StoreCreated" | "StoreQueryError" | "StoreCleared";
+export type IndexedDBIndexActionResultType = "IndexCreated" | "IndexNotFound" | "IndexCreationError";
+export type IndexedDBCursorActionResultType = "CursorRecord" | "CursorNoMoreRecords" | "CursorFailure" | "CursorNotOpen";
+export type IndexedDBQueryActionResultType = "IDBKeyCreated" | "IDBKeyFailure";
+
+export type IndexedDBRecordActionResultType = "Record" | "RecordDeleted" | "RecordNotFound" | "RecordQueryError";
+
+
+export type IndexedDBActionResultType = IndexedDBCursorActionResultType | IndexedDBIndexActionResultType | IndexedDBGenericErrorResultType | IndexedDBStoreActionResultType | IndexedDBDatabaseActionResultType | IndexedDBQueryActionResultType | IndexedDBRecordActionResultType;
 export interface IndexedDBActionResultBase {
     success: boolean;
     message: string;
-    type?: string;
+    type: IndexedDBActionResultType;
 }
 
 export interface IndexedDBActionResultSuccess<T> extends IndexedDBActionResultBase {

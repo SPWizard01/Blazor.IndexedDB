@@ -55,8 +55,6 @@ export type IndexedDBQueryConvertion = IndexedDBQueryConvertionKeyRange | Indexe
 
 
 export interface IndexedDBQuery extends IndexedDBObjectBase {
-    queryValue: IndexedDBQueryType;
-}
-export interface IndexedDBIndexQuery extends IndexedDBQuery {
     indexName: string;
+    queryValue: IndexedDBQueryType;
 }

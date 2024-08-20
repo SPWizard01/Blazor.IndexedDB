@@ -8,7 +8,7 @@ namespace Blazor.IndexedDB.Models.JS
         [JsonPropertyName("success")]
         public bool Success { get; set; }
         [JsonPropertyName("result")]
-        public IndexedDBRecord<T> Result { get; set; }
+        public required IndexedDBRecord<T> Result { get; set; }
         [JsonPropertyName("message")]
         public string Message { get; set; } = string.Empty;
         [JsonPropertyName("type")]

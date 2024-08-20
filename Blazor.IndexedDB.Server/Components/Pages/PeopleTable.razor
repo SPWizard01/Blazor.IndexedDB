@@ -136,7 +136,7 @@
         {
             return;
         }
-        await DbManager.DeleteRecordByKey(People.ToRecord(SelectedPerson).ToQueryAction(IndexedDBQueryCreator.ValidKeyQuery(SelectedPerson.Id!), true));
+        await DbManager.DeleteRecord(People.ToRecord(SelectedPerson).ToQueryAction(IndexedDBQueryCreator.ValidKeyQuery(SelectedPerson.Id!), true));
         SelectedPerson = null;
     }
 

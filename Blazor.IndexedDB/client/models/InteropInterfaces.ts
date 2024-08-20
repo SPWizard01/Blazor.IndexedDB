@@ -1,5 +1,5 @@
 ﻿import { IDBPDatabase } from "idb";
-import { IndexedDBQueryType } from "./queryValue";
+import { IndexedDBQuery } from "./queryValue";
 
 /**Defines the Database to open or create.*/
 export interface IIndexedDBDatabase {
@@ -11,9 +11,16 @@ export interface IIndexedDBDatabase {
     stores: IStoreSchema[];
 }
 
+export interface IndexedDBCursorQuery {
+    initialQuery: IndexedDBQuery;
+    cursorPosition: number;
+    direction?: IDBCursorDirection;
+}
+
 export interface IIndexedDBDatabaseInstance {
     name: string;
     instance: IDBPDatabase;
+    executingCursors: IndexedDBCursorQuery[];
 }
 
 /**Defines a store to be created in the database. */

@@ -47,7 +47,7 @@
 
                 <MudSwitch Color="Color.Primary" T="bool" Value="PKSearch" ValueChanged="PKSearchSelected">Primary Key Search</MudSwitch>
                 <MudSwitch Color="Color.Primary" @bind-Value="ReturnAll">Return All</MudSwitch>
-                <MudSelect T="string" Value="SelectedSearchValueType" ValueChanged="SelectedSearchValueTypeChanged" Label="Index" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                <MudSelect T="string" Value="SelectedSearchValueType" ValueChanged="SelectedSearchValueTypeChanged" Label="Value Type" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
                     @foreach (var searchValue in searchValueAs)
                     {
                         <MudSelectItem Value="searchValue">@searchValue</MudSelectItem>
@@ -68,7 +68,7 @@
                         <MudSelectItem Value="index" />
                     }
                 </MudSelect>
-                <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="SearchForRecords">Search</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Outlined" Disabled="string.IsNullOrEmpty(SelectedMethod) && !ReturnAll" OnClick="SearchForRecords">Search</MudButton>
             </MudStack>
             <MudStack>
                 <MudRadioGroup Disabled="ReturnAll" @bind-Value="SelectedQuery">
@@ -182,8 +182,8 @@
 
 
     List<string> indexMethods = ["iterateRecordsByIndex", "getRecordByIndex", "getAllRecordsByIndexQuery", "getAllRecordsByIndex", "getAllKeysByIndex", "getKeyByIndex"];
-    List<string> storeMethods = ["iterateRecords", "getRecord", "getAllRecords", "getAllRecordsByQuery", "getAllKeys", "getKey"];
-    List<string> searchValueAs = ["string", "number", "datetime", "datetimeoffset", "arrayofstring", "arrayofnumbers", "arrayofdatetime", "arrayofdatetimeoffset", "arrayofbytes"];
+    List<string> storeMethods = ["openCursorDebug", "advanceCursorDebug", "iterateRecords", "getRecord", "getAllRecords", "getAllRecordsByQuery", "getAllKeys", "getKey"];
+    List<string> searchValueAs = ["string", "number", "datetime", "datetimeoffset", "arrayofobjects"];
     string SelectedMethod { get; set; } = string.Empty;
     string SelectedQuery { get; set; } = string.Empty;
     string SelectedSearchValueType { get; set; } = "string";
@@ -305,7 +305,7 @@
             return;
         }
         await DbManager.OpenDb(SelectedDatabase);
-        await DbManager.GetCurrentDbState(SelectedDatabase);
+        await DbManager.GetDatabaseInfo(SelectedDatabase);
         StateHasChanged();
     }
 
@@ -367,7 +367,7 @@
             };
 
         await DbManager.AddNewStore(db, newStoreSchema);
-        await DbManager.GetCurrentDbState(db);
+        await DbManager.GetDatabaseInfo(db);
     }
 
     protected async Task ClearStore()
@@ -376,7 +376,7 @@
         {
             return;
         }
-        await DbManager.ClearStore(SelectedDatabase, SelectedStore.Name);
+        await DbManager.ClearStore(new() { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
         GetRecords();
     }
 
@@ -400,8 +400,11 @@
     {
         object convertedValue = value;
 
-        switch(SelectedSearchValueType)
+        switch (SelectedSearchValueType)
         {
+            case "string":
+                convertedValue = value;
+                break;
             case "number":
                 convertedValue = long.Parse(value);
                 break;
@@ -411,20 +414,8 @@
             case "datetimeoffset":
                 convertedValue = DateTimeOffset.Parse(value);
                 break;
-            case "arrayofstring":
-                convertedValue = value.Split(',');
-                break;
-            case "arrayofnumbers":
-                convertedValue = value.Split(',').Select(long.Parse).ToArray();
-                break;
-            case "arrayofdatetime":
-                convertedValue = value.Split(',').Select(DateTime.Parse).ToArray();
-                break;
-            case "arrayofdatetimeoffset":
-                convertedValue = value.Split(',').Select(DateTimeOffset.Parse).ToArray();
-                break;
-            case "arrayofbytes":
-                convertedValue = value.Split(',').Select(byte.Parse).ToArray();
+            case "arrayofobjects":
+                convertedValue = value.Split(',').Select(s => (object)s);
                 break;
         }
         return convertedValue;
@@ -436,11 +427,19 @@
         {
             return;
         }
+
+        if (SelectedMethod == "openCursorDebug" || SelectedMethod == "advanceCursorDebug")
+        {
+            await DbManager.CallJavaScriptDebug<object>(SelectedMethod, new IndexedDBQuery(new IndexedDBQueryNoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+            return;
+        }
+
+
         IIndexedDBQuery? queryValue = null;
         IndexedDBQuery? query = null;
         if (SelectedQuery == "Simple")
         {
-            queryValue = new IndexedDBQueryValidKey<object>(GetConvertedValue(SimpleSearchString));
+            queryValue = new IndexedDBQueryValidKey(GetConvertedValue(SimpleSearchString));
         }
         if (SelectedQuery == "Bound")
         {
@@ -460,16 +459,8 @@
         }
         if (queryValue == null) return;
 
-        if (SelectedIndex == null)
-        {
+        query = new IndexedDBQuery(queryValue, SelectedIndex?.Name ?? "") { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name };
 
-            query = new IndexedDBQuery(queryValue) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name };
-        }
-        else
-        {
-            query = new IndexedDBIndexQuery(SelectedIndex.Name, queryValue) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name };
-
-        }
 
         if (query == null) return;
         await DbManager.CallJavaScriptDebug<object>(SelectedMethod, query);

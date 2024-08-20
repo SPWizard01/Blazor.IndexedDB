@@ -17,7 +17,6 @@ namespace Blazor.IndexedDB
     {
         private readonly IJSRuntime _jsRuntime;
         private readonly DotNetObjectReference<IndexedDBManager> _dbManagerRef;
-        private bool _isOpen;
         private IJSObjectReference? _jsModule;
 
         /// <summary>
@@ -25,36 +24,29 @@ namespace Blazor.IndexedDB
         /// </summary>
         public event EventHandler<IndexedDBNotificationEvent>? ActionCompleted;
 
+        /// <summary>
+        /// A collection of IndexedDB databases that are defined in the application
+        /// </summary>
+        public IndexedDBDatabaseCollection DBStore { get; }
+
         public IndexedDBManager(IndexedDBDatabaseCollection dbStore, IJSRuntime jsRuntime)
         {
             _jsRuntime = jsRuntime;
             _dbManagerRef = DotNetObjectReference.Create(this);
             DBStore = dbStore;
         }
-        public IndexedDBDatabaseCollection DBStore { get; }
         /// <summary>
         /// Opens the IndexedDB defined in the DbStore. Under the covers will create the database if it does not exist
         /// and create the stores defined in DbStore.
         /// </summary>
         /// <returns></returns>
-        public Task OpenDb(string dbName)
+        public Task<List<IndexedDBActionResult<string?>>> OpenDb(string dbName)
         {
             return OpenDb(DBStore.First(s => s.Name == dbName));
         }
-        public async Task OpenDb(IndexedDBDatabase db)
+        public async Task<List<IndexedDBActionResult<string?>>> OpenDb(IndexedDBDatabase db)
         {
-            try
-            {
-
-                var result = await CallJavaScriptReturnMany<string?>(IndexedDBJSModuleMethod.OpenDb, db);
-                _isOpen = true;
-
-                await GetCurrentDbState(db);
-            }
-            catch (JSException jse)
-            {
-                RaiseNotification(IndexDBActionOutcome.Failure, jse.Message);
-            }
+            return await CallJavaScriptReturnMany<string?>(IndexedDBJSModuleMethod.OpenDb, db);
 
         }
 
@@ -63,19 +55,15 @@ namespace Blazor.IndexedDB
         /// </summary>
         /// <param name="dbName">The name of database to delete</param>
         /// <returns></returns>
-        public async Task DeleteDb(IndexedDBDatabase db)
+        public async Task<IndexedDBActionResult<string?>> DeleteDb(IndexedDBDatabase db)
         {
-            if (string.IsNullOrEmpty(db.Name))
-            {
-                throw new ArgumentException("Database Name cannot be null or empty");
-            }
-            var result = await CallJavaScript<string?>(IndexedDBJSModuleMethod.DeleteDb, db.Name);
-
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.DeleteDb, db.Name);
         }
 
-        public async Task GetCurrentDbState(IndexedDBDatabase db)
+        //TODO: Refactor
+        public async Task GetDatabaseInfo(IndexedDBDatabase db)
         {
-            var result = await CallJavaScript<DBInformation>(IndexedDBJSModuleMethod.GetDbInfo, db.Name);
+            var result = await CallJavaScript<DBInformation>(IndexedDBJSModuleMethod.GetDatabaseInfo, db.Name);
 
             if (result.Result?.Data?.Version > db.Version)
             {
@@ -94,11 +82,7 @@ namespace Blazor.IndexedDB
             }
         }
 
-        /// <summary>
-        /// This function provides the means to add a store to an existing database,
-        /// </summary>
-        /// <param name="storeSchema"></param>
-        /// <returns></returns>
+        //TODO: Refactor
         public async Task AddNewStore(IndexedDBDatabase db, IndexedDBStoreSchema storeSchema)
         {
             if (storeSchema == null)
@@ -114,7 +98,6 @@ namespace Blazor.IndexedDB
             db.Version += 1;
 
             var result = await CallJavaScript<string>(IndexedDBJSModuleMethod.OpenDb, db.Name);
-            _isOpen = true;
 
             RaiseNotification(IndexDBActionOutcome.TableCreated, $"new store {storeSchema.Name} added");
         }
@@ -150,126 +133,95 @@ namespace Blazor.IndexedDB
         /// <param name="storeName"></param>
         /// <param name="id"></param>
         /// <returns></returns>
-        public async Task DeleteRecordByQuery(IndexedDBQuery query)
+        public async Task<IndexedDBActionResult<string?>> DeleteRecord(IndexedDBQuery query)
         {
-            try
-            {
-                await CallJavaScript<string>(IndexedDBJSModuleMethod.DeleteRecordByQuery, query);
-            }
-            catch (JSException jse)
-            {
-                RaiseNotification(IndexDBActionOutcome.Failure, jse.Message);
-            }
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.DeleteRecord, query);
         }
 
-        /// <summary>
-        /// Deletes a record from the store based on the id
-        /// </summary>
-        /// <returns></returns>
-        public async Task<IndexedDBActionResult<object>> DeleteRecordByKey(IndexedDBQuery record)
-        {
 
-            return await CallJavaScript<object>(IndexedDBJSModuleMethod.DeleteRecordByKey, record);
-        }
 
         /// <summary>
         /// Clears all of the records from a given store.
         /// </summary>
         /// <param name="storeName">The name of the store to clear the records from</param>
         /// <returns></returns>
-        public async Task ClearStore(IndexedDBDatabase db, string storeName)
+        public async Task<IndexedDBActionResult<string?>> ClearStore(IndexedDBObjectBase target)
         {
-            if (string.IsNullOrEmpty(storeName))
-            {
-                throw new ArgumentException("Parameter cannot be null or empty", nameof(storeName));
-            }
 
-            try
-            {
-                var result = await CallJavaScript<string?>(IndexedDBJSModuleMethod.ClearStore, db.Name, storeName);
-            }
-            catch (JSException jse)
-            {
-                RaiseNotification(IndexDBActionOutcome.Failure, jse.Message);
-
-            }
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.ClearStore, target);
 
         }
-
-        #region IndexQueryMethods
-        /// <summary>
-        /// Iterates over all of the records in a given store that match a query against a given index
-        /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="searchQuery">an instance of StoreIndexQuery</param>
-        /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> IterateRecordsByIndex<TResult>(IndexedDBIndexQuery searchQuery, IndexedDBDirection direction)
-        {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecordsByIndex, searchQuery, direction);
-        }
-
-
-
-
-        /// <summary>
-        /// Returns the first record that matches a query against a given index
-        /// </summary>
-        /// <param name="searchQuery" cref="IndexedDBSearch">an instance of IndexedDBSearch</param>
-        /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> GetRecordByIndex<TResult>(IndexedDBIndexQuery searchQuery)
-        {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.GetRecordByIndex, searchQuery);
-        }
-
-        /// <summary>
-        /// Gets all of the records that match a given query in the specified index.
-        /// </summary>
-        /// <typeparam name="TInput"></typeparam>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="searchQuery"></param>
-        /// <returns></returns>
-        public async Task<IndexedDBActionResult<List<TResult>>> GetAllRecordsByIndexQuery<TInput, TResult>(IndexedDBIndexQuery searchQuery, int count = -1)
-        {
-            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByIndexQuery, searchQuery, count);
-        }
-
-        /// <summary>
-        /// Gets all of the records in the specified index.
-        /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="searchQuery"></param>
-        /// <returns></returns>
-        public async Task<IndexedDBActionResult<List<TResult>>> GetAllRecordsByIndex<TResult>(IndexedDBIndexQuery searchQuery)
-        {
-            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByIndex, searchQuery);
-        }
-
-        /// <summary>
-        /// Gets all of the keys in the specified index that match the query
-        /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="searchQuery"></param>
-        /// <returns></returns>
-        public async Task<IndexedDBActionResult<List<TResult>>> GetAllKeysByIndex<TResult>(IndexedDBIndexQuery searchQuery, int count = -1)
-        {
-            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethod.GetAllKeysByIndex, searchQuery, count);
-        }
-
-        /// <summary>
-        /// Gets all of the keys in the specified index that match the query
-        /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="searchQuery"></param>
-        /// <returns></returns>
-        public async Task<IndexedDBActionResult<IList<TResult>>> GetKeyByIndex<TResult>(IndexedDBIndexQuery searchQuery)
-        {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetKeyByIndex, searchQuery);
-        }
-        #endregion
 
         #region ObjectStoreQueryMethods
+
         /// <summary>
-        /// Iterates over all of the records in a given store that match a query
+        /// Opens a cursor that returns first matching query record. Later on you can call AdvanceCursor to get the next record
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="searchQuery"></param>
+        /// <param name="direction"></param>
+        /// <returns></returns>
+        public async Task<IndexedDBActionResult<TResult>> OpenCursor<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection? direction)
+        {
+            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.OpenCursor, searchQuery, direction);
+        }
+
+        /// <summary>
+        /// Advances the cursor to the next record that matches the query, the query should be the same as the one used in OpenCursor
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="searchQuery"></param>
+        /// <returns></returns>
+        public async Task<IndexedDBActionResult<TResult>> AdvanceCursor<TResult>(IndexedDBQuery searchQuery)
+        {
+            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.AdvanceCursor, searchQuery);
+        }
+
+        /// <summary>
+        /// Closes the cursor opened by <see cref="OpenCursor"/>
+        /// <para>
+        /// Parameter <paramref name="searchQuery"/> should be the same as the one used in OpenCursor
+        /// </para>
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="searchQuery"></param>
+        /// <returns></returns>
+        public async Task<IndexedDBActionResult<string?>> CloseCursor(IndexedDBQuery searchQuery)
+        {
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseCursor, searchQuery);
+        }
+
+        /// <summary>
+        /// Closes all cursors opened by <see cref="OpenCursor"/> for a given store
+        /// <para>
+        /// Parameter <paramref name="searchQuery"/> should be the same as the one used in OpenCursor
+        /// </para>
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="searchQuery"></param>
+        /// <returns></returns>
+        public async Task<IndexedDBActionResult<string?>> CloseAllStoreCursors(IndexedDBObjectBase searchQuery)
+        {
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseAllStoreCursors, searchQuery);
+        }
+
+        /// <summary>
+        /// Closes all cursors opened by <see cref="OpenCursor"/> for a given database
+        /// <para>
+        /// Parameter <paramref name="databaseName"/> should be the same as the one used in OpenCursor
+        /// </para>
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="databaseName"></param>
+        /// <returns></returns>
+        public async Task<IndexedDBActionResult<string?>> CloseAllCursors(string databaseName)
+        {
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseAllCursors, databaseName);
+        }
+
+
+        /// <summary>
+        /// Iterates over all of the records in a given store (and index if supplied) that match a query
         /// </summary>
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery">an instance of StoreIndexQuery</param>
@@ -281,9 +233,9 @@ namespace Blazor.IndexedDB
 
 
         /// <summary>
-        /// Returns the first record that matches a query against a given index
+        /// Returns the first record that matches a query
         /// </summary>
-        /// <param name="searchQuery" cref="IndexedDBSearch">an instance of IndexedDBSearch</param>
+        /// <param name="searchQuery" cref="IndexedDBQuery">an instance of IndexedDBQuery</param>
         /// <returns></returns>
         public async Task<IndexedDBActionResult<TResult>> GetRecord<TResult>(IndexedDBQuery searchQuery)
         {
@@ -293,24 +245,13 @@ namespace Blazor.IndexedDB
         /// <summary>
         /// Gets all of the records that match a given query
         /// </summary>
-        /// <typeparam name="TInput"></typeparam>
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
+        /// <param name="count">-1 returns all records, anything greater than 0 will return limited amount of data</param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<List<TResult>>> GetAllRecordsByQuery<TResult>(IndexedDBQuery searchQuery, int count = -1)
+        public async Task<IndexedDBActionResult<List<TResult>>> GetAllRecords<TResult>(IndexedDBQuery searchQuery, int count = -1)
         {
-            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethod.GetAllRecordsByQuery, searchQuery, count);
-        }
-
-        /// <summary>
-        /// Gets all of the records in the specified store.
-        /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="searchQuery"></param>
-        /// <returns></returns>
-        public async Task<IndexedDBActionResult<List<TResult>>> GetAllRecords<TResult>(IndexedDBQuery searchQuery)
-        {
-            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethod.GetAllRecords, searchQuery);
+            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethod.GetAllRecords, searchQuery, count);
         }
 
         /// <summary>
@@ -318,6 +259,7 @@ namespace Blazor.IndexedDB
         /// </summary>
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
+        /// <param name="count">-1 returns all records, anything greater than 0 will return limited amount of data</param>
         /// <returns></returns>
         public async Task<IndexedDBActionResult<List<TResult>>> GetAllKeys<TResult>(IndexedDBQuery searchQuery, int count = -1)
         {

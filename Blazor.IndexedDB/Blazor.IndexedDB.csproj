@@ -9,7 +9,7 @@
     <AssemblyName>Blazor.IndexedDB</AssemblyName>
     <RootNamespace>Blazor.IndexedDB</RootNamespace>
     <Version>0.0.1</Version>
-    <Authors>SPWizard01</Authors>
+    <Authors>SPWizard</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/SPWizard01/Blazor.IndexedDB</RepositoryUrl>
     <RepositoryType>GIT</RepositoryType>
@@ -25,9 +25,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ClientLibInputs Include="client\**\*.ts" />
-    <PackageJSONInputs Include="package.json; package-lock.json" />
-    <NodeModuleInputs Include="node_modules\**" />
+    <ClientLib Include="client\**\*.ts" />
+    <PackageJSON Include="package.json; package-lock.json" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,15 +42,15 @@
   </ItemGroup>
 
 
-  <Target Name="EnsureNpmRestored" Inputs="@(ClientLibInputs)" Outputs="@(PackageJSONInputs)">
+  <Target Name="EnsureNpmRestored" Inputs="@(ClientLib)" Outputs="@(PackageJSON)">
     <Message Importance="high" Text="Restoring dependencies using 'npm'. This may take several minutes..." />
     <Exec Command="npm install" />
   </Target>
   <!--Inputs="@(ClientLibInputs)" Outputs="wwwroot\client.js" -->
   <Target Name="RunTSBuild" BeforeTargets="Build" AfterTargets="EnsureNpmRestored">
     <Message Importance="high" Text="Building client lib..." />
-    <Exec Command="npx esbuild --bundle --format=esm ./client/app.ts --outfile=./wwwroot/client.js --sourcemap" Condition="$(Configuration)==Debug" />
-    <Exec Command="npx esbuild --bundle --format=esm ./client/app.ts --outfile=./wwwroot/client.js --sourcemap --minify" Condition="$(Configuration)==Release" />
+    <Exec Command="npx esbuild --bundle --format=esm ./client/app.ts --outfile=./wwwroot/client.js --sourcemap --define:DEBUG=1" Condition="$(Configuration)==Debug" />
+    <Exec Command="npx esbuild --bundle --format=esm ./client/app.ts --outfile=./wwwroot/client.js --sourcemap --define:DEBUG=0 --minify" Condition="$(Configuration)==Release" />
   </Target>
  
 

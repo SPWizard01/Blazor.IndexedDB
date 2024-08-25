@@ -1,0 +1,19 @@
+﻿<MudSelect T="string" @bind-Value="SelectedMethod" Label="Method" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+    @foreach (var index in storeMethods)
+    {
+        <MudSelectItem Value="index" />
+    }
+</MudSelect>
+<MudButton Color="Color.Primary" Variant="Variant.Outlined" Disabled="string.IsNullOrEmpty(SelectedMethod)" OnClick="SearchForRecords">Search</MudButton>
+@code {
+    [Parameter]
+    public required EventCallback<string> OnSearch { get; set; }
+
+    List<string> storeMethods = ["openCursor", "advanceCursor", "closeCursor", "closeAllStoreCursors", "closeAllCursors", "iterateRecords", "getRecord", "getAllRecords", "getAllKeys", "getKey"];
+    string SelectedMethod { get; set; } = string.Empty;
+
+    void SearchForRecords()
+    {
+        OnSearch.InvokeAsync(SelectedMethod);
+    }
+}

@@ -336,7 +336,9 @@ namespace Blazor.IndexedDB
         [JSInvokable]
         public void RaiseNotificationFromJS(IndexedDBActionResult<object> result)
         {
+#if DEBUG
             Console.WriteLine($"JS Outcome: {result.Type}, Message: {result.Message}");
+#endif
             ActionCompleted?.Invoke(this, result);
         }
     }

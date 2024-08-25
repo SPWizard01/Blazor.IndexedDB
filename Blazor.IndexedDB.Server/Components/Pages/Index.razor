@@ -1,4 +1,4 @@
-﻿@page "/indexed-db-primarykey"
+﻿@page "/indexed-db-index"
 
 @using Blazor.IndexedDB.Models.JS
 @using Blazor.IndexedDB.Models.Query
@@ -6,10 +6,11 @@
 @using Blazor.IndexedDB.Server.Components.Shared
 @using Blazor.IndexedDB.Server.Models
 @using Blazor.IndexedDB.Models
+@using System.Text.Json
 @inject IndexedDBManager DbManager
 @inject IDialogService DialogService
 <div>
-     <Notifications DbManager="DbManager" />
+    <Notifications DbManager="DbManager" />
     <MudStack Row="true" Class="pa-2 ma-2" Justify="Justify.SpaceBetween">
         <DatabaseActions DbManager="DbManager" @bind-Database="SelectedDatabase" @bind-Store="SelectedStore" />
     </MudStack>
@@ -17,6 +18,12 @@
         <MudText Typo="Typo.h6">Search Records</MudText>
         <MudStack Row="true" Justify="Justify.FlexStart">
             <MudStack>
+                <MudSelect T="IndexedDBIndex" Value="SelectedIndex" ValueChanged="SelectedIndexChanged" Label="Index" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                    @foreach (var index in SelectedStore?.Indexes ?? [])
+                    {
+                        <MudSelectItem Value="index">@index.Name</MudSelectItem>
+                    }
+                </MudSelect>
                 <MethodSearch OnSearch="SearchForRecords" />
             </MudStack>
             <MudStack>
@@ -30,63 +37,24 @@
         <PeopleTable People="@People" DialogService="@DialogService" DbManager="@DbManager" />
     }
 
-    @if (SelectedStore?.Name == "Vehicles")
+    @if (SelectedStore?.Name == "Vehicles" && Vehicles.Data.Count > 0)
     {
         <VehicleTable Vehicles="@Vehicles" DialogService="@DialogService" DbManager="@DbManager" />
-
     }
-
 </div>
 @code {
-    // [Inject]
-    // public required IndexedDBDatabase DbStore { get; set; }
-    // @inject DbStore DbStore
-
+    IIndexedDBQuery? QueryValue { get; set; }
 
     IndexedDBDatabase? SelectedDatabase { get; set; }
     IndexedDBStoreSchema? SelectedStore { get; set; }
+    IndexedDBIndex? SelectedIndex { get; set; }
     IndexedDBRecord<List<Person>>? People { get; set; }
     IndexedDBRecord<List<Vehicle>>? Vehicles { get; set; }
 
-    IIndexedDBQuery? QueryValue { get; set; }
-
-
-    protected async void GetRecords()
+    void SelectedIndexChanged(IndexedDBIndex selected)
     {
-        if (SelectedDatabase == null || SelectedStore == null)
-        {
-            return;
-        }
-        if (SelectedStore.Name == "Employees")
-        {
-            var results = await DbManager.GetAllRecords<Person>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
-
-            if (results != null && results.Result.Data != null && results.Result.Data.Any())
-            {
-                People = results.Result;
-            }
-            else
-            {
-                People = null;
-            }
-        }
-        else
-        {
-            var results = await DbManager.GetAllRecords<Vehicle>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
-            if (results != null && results.Result.Data != null && results.Result.Data.Any())
-            {
-                Vehicles = results.Result;
-            }
-            else
-            {
-                Vehicles = null;
-            }
-        }
-
-        StateHasChanged();
+        SelectedIndex = selected;
     }
-
-
 
 
     protected async Task SearchForRecords(string selectedMethod)
@@ -95,6 +63,6 @@
         {
             return;
         }
-        await HelperMethods.SearchForRecords(DbManager, selectedMethod, SelectedDatabase?.Name, SelectedStore?.Name, "", QueryValue);
+        await HelperMethods.SearchForRecords(DbManager, selectedMethod, SelectedDatabase?.Name, SelectedStore?.Name, SelectedIndex?.Name ?? "", QueryValue);
     }
 }

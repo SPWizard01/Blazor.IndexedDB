@@ -1,0 +1,177 @@
+﻿@using Blazor.IndexedDB.Models.Query
+<MudItem xs="2">
+    <MudSelect T="string" Value="SelectedSearchValueType" FullWidth="false" ValueChanged="SelectedSearchValueTypeChanged" Label="Select value type" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+        @foreach (var searchValue in searchValueAs)
+        {
+            <MudSelectItem Value="searchValue">@searchValue</MudSelectItem>
+        }
+    </MudSelect>
+</MudItem>
+<MudRadioGroup T="string" Value="Query" ValueChanged="QueryChanged">
+    <MudStack Row="true">
+        <MudStack>
+            <MudText>Simple Query</MudText>
+            <MudPaper Outlined="true" Class="pa-1">
+                <MudRadio Value="@("Simple")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                    <MudStack>
+                        <MudTextField Label="Search String" Variant="Variant.Outlined" Value="SimpleSearchString" T="string" ValueChanged="SimpleSearchStringChanged" />
+                    </MudStack>
+                </MudRadio>
+            </MudPaper>
+        </MudStack>
+        <MudStack>
+            <MudText>Bound Query</MudText>
+            <MudPaper Outlined="true" Class="pa-1">
+                <MudRadio Value="@("Bound")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                    <MudStack>
+                        <MudTextField Label="Lower" Variant="Variant.Outlined" Value="BoundLowerString" T="string" ValueChanged="BoundLowerSearchStringChanged" />
+                        <MudTextField Label="Upper" Variant="Variant.Outlined" Value="BoundUpperString" T="string" ValueChanged="BoundUpperSearchStringChanged" />
+                        <MudSwitch Color="Color.Primary" Value="BoundExcludeLower" T="bool" ValueChanged="BoundLowerExclude">Exclude Lower</MudSwitch>
+                        <MudSwitch Color="Color.Primary" Value="BoundExcludeUpper" T="bool" ValueChanged="BoundUpperExclude">Exclude Upper</MudSwitch>
+                    </MudStack>
+                </MudRadio>
+            </MudPaper>
+        </MudStack>
+        <MudStack>
+            <MudText>Lower Bound Query</MudText>
+            <MudPaper Outlined="true" Class="pa-1">
+                <MudRadio Value="@("Lower")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                    <MudStack>
+                        <MudTextField Label="Lower" Variant="Variant.Outlined" Value="LowerSearchString" T="string" ValueChanged="LowerSearchStringChanged" />
+                        <MudSwitch Color="Color.Primary" Value="LowerExcludeLower" T="bool" ValueChanged="LowerExcludeChanged">Exclude Lower</MudSwitch>
+                    </MudStack>
+                </MudRadio>
+            </MudPaper>
+        </MudStack>
+        <MudStack>
+            <MudText>Upper Bound Query</MudText>
+            <MudPaper Outlined="true" Class="pa-1">
+                <MudRadio Value="@("Upper")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                    <MudStack>
+                        <MudTextField Label="Upper" Variant="Variant.Outlined" Value="UpperSearchString" T="string" ValueChanged="UpperSearchStringChanged" />
+                        <MudSwitch Color="Color.Primary" Value="UpperExcludeUpper" T="bool" ValueChanged="UpperExcludeChanged">Exclude Upper</MudSwitch>
+                    </MudStack>
+                </MudRadio>
+            </MudPaper>
+        </MudStack>
+        <MudStack>
+            <MudText>Only Query</MudText>
+            <MudPaper Outlined="true" Class="pa-1">
+                <MudRadio Value="@("Only")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                    <MudStack>
+                        <MudTextField Label="Search String" Variant="Variant.Outlined" Value="OnlyQuerySearchString" T="string" ValueChanged="OnlySearchStringChanged" />
+                    </MudStack>
+                </MudRadio>
+            </MudPaper>
+        </MudStack>
+    </MudStack>
+</MudRadioGroup>
+@code {
+    [Parameter]
+    public IIndexedDBQuery? QueryValue { get; set; }
+    [Parameter]
+    public EventCallback<IIndexedDBQuery?> QueryValueChanged { get; set; }
+
+    string Query { get; set; } = "Simple";
+    string SelectedSearchValueType { get; set; } = "string";
+
+    string SimpleSearchString { get; set; } = string.Empty;
+    string BoundLowerString { get; set; } = string.Empty;
+    string BoundUpperString { get; set; } = string.Empty;
+    bool BoundExcludeLower { get; set; }
+    bool BoundExcludeUpper { get; set; }
+    string LowerSearchString { get; set; } = string.Empty;
+    bool LowerExcludeLower { get; set; }
+    string UpperSearchString { get; set; } = string.Empty;
+    bool UpperExcludeUpper { get; set; }
+    string OnlyQuerySearchString { get; set; } = string.Empty;
+    List<string> searchValueAs = ["string", "number", "datetime", "datetimeoffset", "arrayofobjects"];
+
+
+
+    void SelectedSearchValueTypeChanged(string selected)
+    {
+        SelectedSearchValueType = selected;
+        if (Query == null) return;
+        HandleChange();
+    }
+
+    void QueryChanged(string query)
+    {
+        Query = query;
+        HandleChange();
+    }
+
+    void HandleChange()
+    {
+        QueryValue = HelperMethods.GetQuery(Query, SelectedSearchValueType, SimpleSearchString, BoundLowerString, BoundUpperString, BoundExcludeLower, BoundExcludeUpper, LowerSearchString, LowerExcludeLower, UpperSearchString, UpperExcludeUpper, OnlyQuerySearchString);
+        QueryValueChanged.InvokeAsync(QueryValue);
+    }
+
+
+    void SimpleSearchStringChanged(string value)
+    {
+        SimpleSearchString = value;
+        if (Query == "Simple")
+            HandleChange();
+    }
+
+    void BoundLowerSearchStringChanged(string value)
+    {
+        BoundLowerString = value;
+        if (Query == "Bound")
+            HandleChange();
+    }
+    void BoundUpperSearchStringChanged(string value)
+    {
+        BoundUpperString = value;
+        if (Query == "Bound")
+            HandleChange();
+    }
+
+    void BoundLowerExclude(bool value)
+    {
+        BoundExcludeLower = value;
+        if (Query == "Bound")
+            HandleChange();
+    }
+
+    void BoundUpperExclude(bool value)
+    {
+        BoundExcludeUpper = value;
+        if (Query == "Bound")
+            HandleChange();
+    }
+    void LowerSearchStringChanged(string value)
+    {
+        LowerSearchString = value;
+        if (Query == "Lower")
+            HandleChange();
+    }
+    void LowerExcludeChanged(bool value)
+    {
+        LowerExcludeLower = value;
+        if (Query == "Lower")
+            HandleChange();
+    }
+
+    void UpperSearchStringChanged(string value)
+    {
+        UpperSearchString = value;
+        if (Query == "Upper")
+            HandleChange();
+    }
+    void UpperExcludeChanged(bool value)
+    {
+        UpperExcludeUpper = value;
+        if (Query == "Upper")
+            HandleChange();
+    }
+
+    void OnlySearchStringChanged(string value)
+    {
+        OnlyQuerySearchString = value;
+        if (Query == "Only")
+            HandleChange();
+    }
+}

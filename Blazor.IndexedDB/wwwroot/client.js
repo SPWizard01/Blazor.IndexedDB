@@ -313,6 +313,9 @@ var IndexedDbManager = class {
         this.getFailureResult(`Could not verify schema ${e}`, { databaseName: indexedDatabase.name, storeName: "" }, "SchemaVerificationError")
       );
     }
+    if (!dbOpenOutcomes.some((o) => !o.success)) {
+      dbOpenOutcomes.push(this.getSuccessResult(`Database ${indexedDatabase.name} opened`, void 0, { databaseName: indexedDatabase.name, storeName: "" }, "DatabaseOpened"));
+    }
     return dbOpenOutcomes;
   }
   async deleteDb(databaseName) {
@@ -759,7 +762,9 @@ var IndexedDbManager = class {
     };
     if (this._sendNotifications) {
       this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, result);
-      console.log(result);
+      if (1) {
+        console.log(result);
+      }
     }
     return result;
   }
@@ -776,7 +781,9 @@ var IndexedDbManager = class {
     };
     if (this._sendNotifications) {
       this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, result);
-      console.log(result);
+      if (1) {
+        console.log(result);
+      }
     }
     return result;
   }

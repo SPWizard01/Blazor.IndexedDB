@@ -9,7 +9,7 @@
     public sealed class IndexedDBQueryLowerBound(object Lower, bool LowerOpen = false) : IIndexedDBQuery
     {
         public IndexedDBQueryType QueryType { get; set; } = IndexedDBQueryType.LowerBoundQuery;
-        public object Lower { get; } = Lower;
+        public object LowerBound { get; } = Lower;
         public bool LowerOpen { get; } = LowerOpen;
     }
 }

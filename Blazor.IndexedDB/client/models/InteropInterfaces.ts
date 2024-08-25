@@ -1,5 +1,11 @@
 ﻿import { IDBPDatabase } from "idb";
 import { IndexedDBQuery } from "./queryValue";
+import { type DotNet } from "@microsoft/dotnet-js-interop";
+
+export interface IndexedDBJSConfig {
+    dotNetReference: DotNet.DotNetObject;
+    sendNotificationsFromJS: boolean;
+}
 
 /**Defines the Database to open or create.*/
 export interface IIndexedDBDatabase {

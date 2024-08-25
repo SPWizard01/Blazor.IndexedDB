@@ -1,5 +1,5 @@
 ﻿import { IDBPObjectStore, IDBPDatabase, openDB, deleteDB, TypedDOMStringList, StoreNames, IDBPTransaction } from "idb";
-import { IIndexedDBDatabase, IStoreSchema, DBInformation, IIndexSpec, IIndexedDBDatabaseInstance, IndexedDBCursorQuery } from "./models/InteropInterfaces";
+import { IIndexedDBDatabase, IStoreSchema, DBInformation, IIndexSpec, IIndexedDBDatabaseInstance, IndexedDBCursorQuery, IndexedDBJSConfig } from "./models/InteropInterfaces";
 import { DotNet } from "@microsoft/dotnet-js-interop";
 import { IndexedDBActionResult, IndexedDBActionResultFailure, IndexedDBActionResultSuccess, IndexedDBActionResultType } from "./models/actionResult";
 import { IndexedDBQueryType, IndexedDBQueryConvertion, IndexedDBQuery } from "./models/queryValue";
@@ -11,27 +11,28 @@ export class IndexedDbManager {
 
     private instances: IIndexedDBDatabaseInstance[] = [];
     private _dbManagerRef: DotNet.DotNetObject;
-    // private upgradeChannel: BroadcastChannel; 
+    private _sendNotifications = false;
 
-    constructor(dbManagerRef: DotNet.DotNetObject) {
-        this._dbManagerRef = dbManagerRef;
+    constructor(instanceConfig: IndexedDBJSConfig) {
+        this._dbManagerRef = instanceConfig.dotNetReference;
+        this._sendNotifications = instanceConfig.sendNotificationsFromJS;
     }
 
 
-    public async openDb(dbStore: IIndexedDBDatabase) {
+    public async openDb(indexedDatabase: IIndexedDBDatabase) {
         const dbOpenOutcomes: IndexedDBActionResult<any>[] = [];
-        let dbInstance = this.getInstance(dbStore.name);
+        let dbInstance = this.getInstance(indexedDatabase.name);
         try {
-            if (!dbInstance || dbInstance.instance.version < dbStore.version) {
+            if (!dbInstance || dbInstance.instance.version < indexedDatabase.version) {
                 if (dbInstance) {
                     dbInstance.instance.close();
                     this.instances.splice(this.instances.indexOf(dbInstance), 1);
                 }
 
-                const instance = await openDB(dbStore.name, dbStore.version, {
+                const instance = await openDB(indexedDatabase.name, indexedDatabase.version, {
                     upgrade: async (database, oldVersion, newVersion, transaction) => {
 
-                        const outcomes = this.upgradeDatabase(database, dbStore, oldVersion, newVersion!, transaction);
+                        const outcomes = this.upgradeDatabase(database, indexedDatabase, oldVersion, newVersion!, transaction);
                         await transaction.done;
                         dbOpenOutcomes.push(...outcomes);
                     },
@@ -39,15 +40,15 @@ export class IndexedDbManager {
                         const message = `Database upgrade blocked. Current version: ${currentVersion}, Blocked version: ${blockedVersion}`;
                         console.warn(message, event);
                         dbOpenOutcomes.push(
-                            this.getFailureResult(message, "DatabaseUpgradeBlocked"));
+                            this.getFailureResult(message, { databaseName: indexedDatabase.name, storeName: "" }, "DatabaseUpgradeBlocked"));
                     },
                     blocking: async (currentVersion, blockedVersion, event) => {
                         const message = `Database upgrade blocking. Current version: ${currentVersion}, Blocked version: ${blockedVersion}, trying to close db.`;
                         console.warn(message, event);
                         try {
-                            let blockingInstance = this.getInstance(dbStore.name);;
+                            let blockingInstance = this.getInstance(indexedDatabase.name);;
                             blockingInstance?.instance.close();
-                            const baseInfo: IndexedDBObjectBase = { databaseName: dbStore.name, storeName: "" };
+                            const baseInfo: IndexedDBObjectBase = { databaseName: indexedDatabase.name, storeName: "" };
 
                             dbOpenOutcomes.push(
                                 this.getSuccessResult(message, undefined, baseInfo, "DatabaseUpgradeBlocking")
@@ -57,28 +58,28 @@ export class IndexedDbManager {
                             const message = `Could not close db, will try again. ${e}`;
                             console.error(message);
                             dbOpenOutcomes.push(
-                                this.getFailureResult(message, "DatabaseUpgradeBlocking")
+                                this.getFailureResult(message, { databaseName: indexedDatabase.name, storeName: "" }, "DatabaseUpgradeBlocking")
                             );
                         }
                     }
                 })
-                dbInstance = { name: dbStore.name, instance, executingCursors: [] };
+                dbInstance = { name: indexedDatabase.name, instance, executingCursors: [] };
                 this.instances.push(dbInstance);
             }
         } catch (e) {
             dbOpenOutcomes.push(
-                this.getFailureResult(`Could not open db ${e}`, "DatabaseOpenError")
+                this.getFailureResult(`Could not open db ${e}`, { databaseName: indexedDatabase.name, storeName: "" }, "DatabaseOpenError")
             );
             return dbOpenOutcomes;
         }
         try {
-            const result = await this.verifySchema(dbInstance.instance, dbStore);
+            const result = await this.verifySchema(dbInstance.instance, indexedDatabase);
             dbOpenOutcomes.push(...result);
 
         }
         catch (e) {
             dbOpenOutcomes.push(
-                this.getFailureResult(`Could not verify schema ${e}`, "SchemaVerificationError")
+                this.getFailureResult(`Could not verify schema ${e}`, { databaseName: indexedDatabase.name, storeName: "" }, "SchemaVerificationError")
             );
         }
 
@@ -98,13 +99,13 @@ export class IndexedDbManager {
             return this.getSuccessResult(msg, undefined, { databaseName, storeName: "" }, "DatabaseDeleted");
         }
         catch (e) {
-            return this.getFailureResult(`Error deleting database: ${e}`, "DatabaseDeleteError");
+            return this.getFailureResult(`Error deleting database: ${e}`, { databaseName, storeName: "" }, "DatabaseDeleteError");
         }
     }
 
-    public async getDatabaseInfo(dbName: string) {
+    public async getDatabaseInfo(databaseName: string) {
         try {
-            const instance = this.getInstance(dbName)!.instance;
+            const instance = this.getInstance(databaseName)!.instance;
             const dbInfo: DBInformation = {
                 name: instance.name,
                 version: instance.version,
@@ -114,7 +115,7 @@ export class IndexedDbManager {
             return this.getSuccessResult("Database information retrieved", dbInfo, { databaseName: instance.name, storeName: "" }, "DatabaseInfo");
         }
         catch (e) {
-            return this.getFailureResult(`Error getting database information: ${e}`, "DatabaseInfoError");
+            return this.getFailureResult(`Error getting database information: ${e}`, { databaseName, storeName: "" }, "DatabaseInfoError");
         }
     }
 
@@ -125,11 +126,11 @@ export class IndexedDbManager {
             const { tx, objectStore, idbKeyResult } = this.getStoreQuery(record, "readwrite");
             itemToSave = this.removePrimaryKeyPropertyIfAutoIncrement(objectStore, itemToSave);
             if (!objectStore.add) {
-                return this.getFailureResult("Add method not available on object store", "RecordQueryError");
+                return this.getFailureResult("Add method not available on object store", record, "RecordQueryError");
             }
             let key: IDBValidKey | IDBKeyRange | undefined = undefined;
             if (!idbKeyResult.success && record.useKey) {
-                return this.getFailureResult("Unable to update record, key not valid", "RecordQueryError");
+                return this.getFailureResult("Unable to update record, key not valid", record, "RecordQueryError");
             }
             if (idbKeyResult.success && record.useKey) {
                 key = idbKeyResult.result.data.value;
@@ -142,7 +143,7 @@ export class IndexedDbManager {
             return this.getSuccessResult(msg, dbResult, record, "Record");
         }
         catch (e) {
-            return this.getFailureResult(`Error adding record: ${e}`, "RecordQueryError");
+            return this.getFailureResult(`Error adding record: ${e}`, record, "RecordQueryError");
         }
 
     }
@@ -151,11 +152,11 @@ export class IndexedDbManager {
         try {
             const { tx, idbKeyResult, objectStore } = this.getStoreQuery(record, "readwrite");
             if (!objectStore.put) {
-                return this.getFailureResult("Put method not available on object store", "RecordQueryError");
+                return this.getFailureResult("Put method not available on object store", record, "RecordQueryError");
             }
             let key: IDBValidKey | IDBKeyRange | undefined = undefined;
             if (!idbKeyResult.success && record.useKey) {
-                return this.getFailureResult("Unable to update record, key not valid", "RecordQueryError");
+                return this.getFailureResult("Unable to update record, key not valid", record, "RecordQueryError");
             }
             if (idbKeyResult.success && record.useKey) {
                 key = idbKeyResult.result.data.value;
@@ -169,7 +170,7 @@ export class IndexedDbManager {
 
         }
         catch (e) {
-            return this.getFailureResult(`Error updating record: ${e}`, "RecordQueryError");
+            return this.getFailureResult(`Error updating record: ${e}`, record, "RecordQueryError");
         }
     }
 
@@ -177,20 +178,20 @@ export class IndexedDbManager {
         try {
             const { tx, objectStore, idbKeyResult } = this.getStoreQuery(query, "readwrite");
             if (!objectStore.delete) {
-                return this.getFailureResult("delete method not available on object store", "RecordQueryError");
+                return this.getFailureResult("delete method not available on object store", query, "RecordQueryError");
             }
             if (!idbKeyResult.success) {
-                return this.getFailureResult(`Error deleting record: ${idbKeyResult.message}`, "RecordQueryError");
+                return this.getFailureResult(`Error deleting record: ${idbKeyResult.message}`, query, "RecordQueryError");
             }
             if (idbKeyResult.result.data.type === "NoQuery") {
-                return this.getFailureResult(`Error deleting record: NoQuery is not a valid query`, "RecordQueryError");
+                return this.getFailureResult(`Error deleting record: NoQuery is not a valid query`, query, "RecordQueryError");
             }
             await objectStore.delete(idbKeyResult.result.data.value);
             await tx.done;
             return this.getSuccessResult(`Deleted records from store ${query.storeName}`, undefined, query, "RecordDeleted");
         }
         catch (e) {
-            return this.getFailureResult(`Error deleting record: ${e}`, "RecordQueryError");
+            return this.getFailureResult(`Error deleting record: ${e}`, query, "RecordQueryError");
         }
     }
 
@@ -199,14 +200,14 @@ export class IndexedDbManager {
         try {
             const { tx, objectStore } = this.getTransaction(record, "readwrite");
             if (!objectStore.clear) {
-                return this.getFailureResult("Clear method not available on object store", "StoreQueryError");
+                return this.getFailureResult("Clear method not available on object store", record, "StoreQueryError");
             }
             await objectStore.clear();
             await tx.done;
             return this.getSuccessResult(`Store ${record.storeName} cleared`, undefined, record, "StoreCleared");
         }
         catch (e) {
-            return this.getFailureResult(`Error clearing store ${record.storeName}: ${e}`, "StoreQueryError");
+            return this.getFailureResult(`Error clearing store ${record.storeName}: ${e}`, record, "StoreQueryError");
         }
     }
 
@@ -224,7 +225,7 @@ export class IndexedDbManager {
             const instance = this.getInstance(searchData.databaseName)!;
             const executingCursor = this.getInstanceExecutingCursor(instance, searchData);
             if (executingCursor) {
-                return this.getFailureResult(`Another cursor is already open`, "CursorFailure");
+                return this.getFailureResult(`Another cursor is already open`, searchData, "CursorFailure");
             }
             const query = idbKeyResult.result.data.value;
             const queryObject = index ?? objectStore;
@@ -235,10 +236,10 @@ export class IndexedDbManager {
                 return this.getSuccessResult(`Cursor result ${queryPath}`, rs.value, searchData, "CursorRecord");
 
             }
-            return this.getSuccessResult(`Cursor result ${queryPath}`, undefined, searchData, "CursorNoMoreRecords");
+            return this.getSuccessResult(`Cursor result ${queryPath}`, undefined, searchData, "CursorClosed");
         }
         catch (e) {
-            return this.getFailureResult(`Error getting records ${e}`, "CursorFailure");
+            return this.getFailureResult(`Error getting records ${e}`, searchData, "CursorFailure");
         }
     }
 
@@ -259,7 +260,7 @@ export class IndexedDbManager {
                 await tx.done;
                 if (!next || !next.value) {
                     instance.executingCursors.splice(instance.executingCursors.indexOf(executingCursor), 1);
-                    return this.getSuccessResult(`No more records ${queryPath}`, undefined, searchData, "CursorNoMoreRecords");
+                    return this.getSuccessResult(`No more records ${queryPath}`, undefined, searchData, "CursorClosed");
                 }
                 executingCursor.cursorPosition += 1;
                 return this.getSuccessResult(`Cursor record ${queryPath}`, next.value, searchData, "CursorRecord");
@@ -269,7 +270,7 @@ export class IndexedDbManager {
 
         }
         catch (e) {
-            return this.getFailureResult(`Error getting records ${e}`, "CursorFailure");
+            return this.getFailureResult(`Error getting records ${e}`, searchData, "CursorFailure");
         }
     }
     public async closeCursor(searchData: IndexedDBQuery) {
@@ -281,10 +282,10 @@ export class IndexedDbManager {
                 return this.getSuccessResult(`No cursor is open`, undefined, searchData, "CursorNotOpen");
             }
             instance.executingCursors.splice(instance.executingCursors.indexOf(executingCursor), 1);
-            return this.getSuccessResult(``, undefined, searchData, "CursorNoMoreRecords");
+            return this.getSuccessResult(``, undefined, searchData, "CursorClosed");
         }
         catch (e) {
-            return this.getFailureResult(`Error closing cursor: ${e}`, "CursorFailure");
+            return this.getFailureResult(`Error closing cursor: ${e}`, searchData, "CursorFailure");
         }
     }
 
@@ -298,17 +299,17 @@ export class IndexedDbManager {
             return this.getSuccessResult(``, undefined, searchData, "CursorNoMoreRecords");
         }
         catch (e) {
-            return this.getFailureResult(`Error closing cursor: ${e}`, "CursorFailure");
+            return this.getFailureResult(`Error closing cursor: ${e}`, searchData, "CursorFailure");
         }
     }
-    public async closeAllCursors(databaseName: string) {
+    public async closeAllCursors(searchData: IndexedDBObjectBase) {
         try {
-            const instance = this.getInstance(databaseName)!;
+            const instance = this.getInstance(searchData.databaseName)!;
             instance.executingCursors = [];
-            return this.getSuccessResult(``, undefined, { databaseName, storeName: "" }, "CursorNoMoreRecords");
+            return this.getSuccessResult(``, undefined, { databaseName: searchData.databaseName, storeName: "" }, "CursorClosed");
         }
         catch (e) {
-            return this.getFailureResult(`Error closing cursor: ${e}`, "CursorFailure");
+            return this.getFailureResult(`Error closing cursor: ${e}`, { databaseName: searchData.databaseName, storeName: "" }, "CursorFailure");
         }
     }
 
@@ -330,7 +331,7 @@ export class IndexedDbManager {
             return this.getSuccessResult(`${results.length} records retrieved ${queryPath}`, results, searchData, results.length > 0 ? "Record" : "RecordNotFound");
         }
         catch (e) {
-            return this.getFailureResult(`Error getting records ${e}`, "StoreQueryError");
+            return this.getFailureResult(`Error getting records ${e}`, searchData, "StoreQueryError");
         }
     }
 
@@ -342,7 +343,7 @@ export class IndexedDbManager {
                 return idbKeyResult
             }
             if (idbKeyResult.result.data.type === "NoQuery") {
-                return this.getFailureResult(`NoQuery is not a valid query`, "RecordQueryError");
+                return this.getFailureResult(`NoQuery is not a valid query`, searchData, "RecordQueryError");
             }
             const queryObject = index ?? objectStore;
             const results = await queryObject.get(idbKeyResult.result.data.value)
@@ -350,7 +351,7 @@ export class IndexedDbManager {
             return this.getSuccessResult(`${results ? "1" : "0"} record retrieved ${queryPath}`, results, searchData, results ? "Record" : "RecordNotFound");
         }
         catch (e) {
-            return this.getFailureResult(`Error getting record: ${e}`, "StoreQueryError");
+            return this.getFailureResult(`Error getting record: ${e}`, searchData, "StoreQueryError");
         }
     }
 
@@ -367,7 +368,7 @@ export class IndexedDbManager {
             return this.getSuccessResult(`${results.length} records retrieved from ${queryPath}`, results, searchData, results.length > 0 ? "Record" : "RecordNotFound");
         }
         catch (e) {
-            return this.getFailureResult(`Error getting records: ${e}`, "StoreQueryError");
+            return this.getFailureResult(`Error getting records: ${e}`, searchData, "StoreQueryError");
         }
     }
 
@@ -384,7 +385,7 @@ export class IndexedDbManager {
             return this.getSuccessResult(`${results.length} keys retrieved from ${queryPath}`, results, searchData, results.length > 0 ? "Record" : "RecordNotFound");
         }
         catch (e) {
-            return this.getFailureResult(`Error getting keys: ${e}`, "StoreQueryError");
+            return this.getFailureResult(`Error getting keys: ${e}`, searchData, "StoreQueryError");
         }
     }
 
@@ -397,7 +398,7 @@ export class IndexedDbManager {
                 return idbKeyResult
             }
             if (idbKeyResult.result.data.type === "NoQuery") {
-                return this.getFailureResult(`NoQuery is not a valid query`, "RecordQueryError");
+                return this.getFailureResult(`NoQuery is not a valid query`, searchData, "RecordQueryError");
             }
             const queryObject = index ?? objectStore;
             const results = await queryObject.getKey(idbKeyResult.result.data.value)
@@ -405,7 +406,7 @@ export class IndexedDbManager {
             return this.getSuccessResult(`${results ? "1" : "0"} keys retrieved from ${queryPath}`, results, searchData, results ? "Record" : "RecordNotFound");
         }
         catch (e) {
-            return this.getFailureResult(`Error getting keys: ${e}`, "StoreQueryError");
+            return this.getFailureResult(`Error getting keys: ${e}`, searchData, "StoreQueryError");
         }
     }
     //#endregion
@@ -437,11 +438,11 @@ export class IndexedDbManager {
                     result = { type: "NoQuery", value: undefined };
                     break;
                 default:
-                    return this.getFailureResult(`Invalid query type ${(query as any).queryType}`, "IDBKeyFailure");
+                    return this.getFailureResult(`Invalid query type ${(query as any).queryType}`, incommingQuery, "IDBKeyFailure");
             }
         }
         catch (e) {
-            return this.getFailureResult(`Failed to create key ${e}`, "IDBKeyFailure");
+            return this.getFailureResult(`Failed to create key ${e}`, incommingQuery, "IDBKeyFailure");
         }
         return this.getSuccessResult("", result, incommingQuery, "IDBKeyCreated");
     }
@@ -514,13 +515,14 @@ export class IndexedDbManager {
         return outcomes;
     }
 
-    private async verifySchema(upgradeDB: IDBPDatabase, dbStore: IIndexedDBDatabase) {
+    private async verifySchema(upgradeDB: IDBPDatabase, database: IIndexedDBDatabase) {
         const result: IndexedDBActionResult<undefined>[] = [];
-        if (dbStore.stores) {
-            for (var store of dbStore.stores) {
+        if (database.stores) {
+            for (var store of database.stores) {
+                const processingObject = { databaseName: database.name, storeName: store.name };
                 if (!upgradeDB.objectStoreNames.contains(store.name)) {
                     result.push(
-                        this.getFailureResult(`Store ${store.name} not found in database`, "StoreNotFound"));
+                        this.getFailureResult(`Store ${store.name} not found in database`, processingObject, "StoreNotFound"));
                     continue;
                 }
 
@@ -529,7 +531,7 @@ export class IndexedDbManager {
                 for (const appIndex of store.indexes) {
                     if (!table.indexNames.contains(appIndex.name)) {
                         result.push(
-                            this.getFailureResult(`Index ${appIndex.name} not found in store ${store.name}`, "IndexNotFound"));
+                            this.getFailureResult(`Index ${appIndex.name} not found in store ${store.name}`, processingObject, "IndexNotFound"));
                         continue;
                     }
                     const idx = table.index(appIndex.name);
@@ -537,13 +539,13 @@ export class IndexedDbManager {
                         for (const idxKey of idx.keyPath) {
                             if (!appIndex.keyPath.includes(idxKey)) {
                                 result.push(
-                                    this.getFailureResult(`Index ${appIndex.name} keyPath does not match. Expected: ${appIndex.keyPath}, Actual: ${idx.keyPath}`, "IndexKeyPathMismatch"));
+                                    this.getFailureResult(`Index ${appIndex.name} keyPath does not match. Expected: ${appIndex.keyPath}, Actual: ${idx.keyPath}`, processingObject, "IndexKeyPathMismatch"));
                             }
                         }
                     } else {
                         if (!appIndex.keyPath.includes(idx.keyPath)) {
                             result.push(
-                                this.getFailureResult(`Index ${appIndex.name} keyPath does not match. Expected: ${appIndex.keyPath}, Actual: ${idx.keyPath}`, "IndexKeyPathMismatch"));
+                                this.getFailureResult(`Index ${appIndex.name} keyPath does not match. Expected: ${appIndex.keyPath}, Actual: ${idx.keyPath}`, processingObject, "IndexKeyPathMismatch"));
                         }
                     }
                 }
@@ -571,7 +573,7 @@ export class IndexedDbManager {
             }
         }
         catch (e) {
-            storeOutcomes.push(this.getFailureResult(`Error creating store ${store.name}: ${e}`, "StoreCreationError"));
+            storeOutcomes.push(this.getFailureResult(`Error creating store ${store.name}: ${e}`, { databaseName: upgradeDB.name, storeName: store.name }, "StoreCreationError"));
         }
         return storeOutcomes;
     }
@@ -583,7 +585,7 @@ export class IndexedDbManager {
         }
 
         if (index.multiEntry && index.keyPath.length > 1) {
-            return this.getFailureResult(`Index ${index.name} has multiEntry set to true but has multiple keyPaths. This is not supported.`, "MultiEntryIndexWithMultipleKeyPaths");
+            return this.getFailureResult(`Index ${index.name} has multiEntry set to true but has multiple keyPaths. This is not supported.`, { databaseName: newStore.transaction.db.name, storeName: newStore.name }, "MultiEntryIndexWithMultipleKeyPaths");
         }
         if (index.multiEntry && index.keyPath.length === 1) {
             //TODO: handle multiEntry indexes with multiple keyPaths
@@ -593,7 +595,7 @@ export class IndexedDbManager {
             newStore.createIndex(index.name, keyPath, { unique: index.unique, multiEntry: index.multiEntry });
         }
         catch (e) {
-            return this.getFailureResult(`Error creating index ${index.name} for store ${newStore.name}: ${e}`, "IndexCreationError");
+            return this.getFailureResult(`Error creating index ${index.name} for store ${newStore.name}: ${e}`, { databaseName: newStore.transaction.db.name, storeName: newStore.name }, "IndexCreationError");
         }
         const message = `Index ${index.name} created inside ${newStore.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`;
         return this.getSuccessResult(message, undefined, { databaseName: "", storeName: newStore.name }, "IndexCreated");
@@ -610,17 +612,27 @@ export class IndexedDbManager {
             message: successMessage,
             type
         }
-        console.log(result);
+        if (this._sendNotifications) {
+            this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, result)
+            console.log(result);
+        }
         return result;
     }
-    private getFailureResult(errorMessage: string, type: IndexedDBActionResultType): IndexedDBActionResultFailure {
+    private getFailureResult(errorMessage: string, requestBase: IndexedDBObjectBase, type: IndexedDBActionResultType): IndexedDBActionResultFailure {
         const result: IndexedDBActionResultFailure = {
             success: false,
-            data: undefined,
+            result: {
+                data: undefined,
+                databaseName: requestBase.databaseName,
+                storeName: requestBase.storeName
+            },
             message: errorMessage,
             type
         }
-        console.log(result);
+        if (this._sendNotifications) {
+            this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, result)
+            console.log(result);
+        }
         return result;
     }
 

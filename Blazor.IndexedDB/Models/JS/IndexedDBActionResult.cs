@@ -13,6 +13,23 @@ namespace Blazor.IndexedDB.Models.JS
         public string Message { get; set; } = string.Empty;
         [JsonPropertyName("type")]
         public string Type { get; set; } = string.Empty;
-    }
 
+        public IndexedDBActionResult<object?> ToObject()
+        {
+            return
+                new IndexedDBActionResult<object?>()
+                {
+                    Success = this.Success,
+                    Result = new IndexedDBRecord<object?>
+                    {
+                        DatabaseName = this.Result.DatabaseName,
+                        StoreName = this.Result.StoreName,
+                        Data = this.Result.Data
+                    },
+                    Message = this.Message,
+                    Type = this.Type
+                };
+        }
+
+    }
 }

@@ -5,7 +5,7 @@ export type IndexedDBGenericErrorResultType = "MultiEntryIndexWithMultipleKeyPat
 export type IndexedDBDatabaseActionResultType = "DatabaseOpenError" | "DatabaseUpgradeBlocked" | "DatabaseUpgradeBlocking" | "DatabaseInfo" | "DatabaseInfoError" | "DatabaseDeleted" | "DatabaseDeleteError";
 export type IndexedDBStoreActionResultType = "StoreNotFound" | "StoreCreationError" | "StoreCreated" | "StoreQueryError" | "StoreCleared";
 export type IndexedDBIndexActionResultType = "IndexCreated" | "IndexNotFound" | "IndexCreationError";
-export type IndexedDBCursorActionResultType = "CursorRecord" | "CursorNoMoreRecords" | "CursorFailure" | "CursorNotOpen";
+export type IndexedDBCursorActionResultType = "CursorRecord" | "CursorNoMoreRecords" | "CursorFailure" | "CursorNotOpen" | "CursorClosed";
 export type IndexedDBQueryActionResultType = "IDBKeyCreated" | "IDBKeyFailure";
 
 export type IndexedDBRecordActionResultType = "Record" | "RecordDeleted" | "RecordNotFound" | "RecordQueryError";
@@ -25,7 +25,7 @@ export interface IndexedDBActionResultSuccess<T> extends IndexedDBActionResultBa
 
 export interface IndexedDBActionResultFailure extends IndexedDBActionResultBase {
     success: false;
-    data: undefined;
+    result: IndexedDBRecordBase<undefined>;
 }
 
 export type IndexedDBActionResult<T> = IndexedDBActionResultSuccess<T> | IndexedDBActionResultFailure;

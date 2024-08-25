@@ -9,7 +9,7 @@
     public sealed class IndexedDBQueryUpperBound(object Upper, bool UpperOpen = false) : IIndexedDBQuery
     {
         public IndexedDBQueryType QueryType { get; set; } = IndexedDBQueryType.UpperBoundQuery;
-        public object Upper { get; } = Upper;
+        public object UpperBound { get; } = Upper;
         public bool UpperOpen { get; } = UpperOpen;
     }
 }

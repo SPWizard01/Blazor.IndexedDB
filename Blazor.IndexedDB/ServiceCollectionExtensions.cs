@@ -13,13 +13,20 @@ namespace Blazor.IndexedDB
         /// <param name="services"></param>
         /// <param name="options">Action to set up the DbStore</param>
         /// <returns></returns>
-        public static IServiceCollection AddIndexedDB(this IServiceCollection services, Action<IndexedDBDatabaseCollection> options, bool serverSide = false)
+        public static IServiceCollection AddIndexedDB(this IServiceCollection services, Action<IndexedDBManagerConfig> options)
         {
-            var dbStore = new IndexedDBDatabaseCollection();
+            var indexedDBConfig = new IndexedDBManagerConfig()
+            {
+                Config = new IndexedDBNotificationConfig()
+                {
+                    SendNotifications = false,
+                    SendNotificationsFromJS = false
+                }
+            };
 
-            options(dbStore);
+            options(indexedDBConfig);
 
-            services.TryAddSingleton(dbStore);
+            services.TryAddSingleton(indexedDBConfig);
             services.AddScoped<IndexedDBManager>();
 
             return services;

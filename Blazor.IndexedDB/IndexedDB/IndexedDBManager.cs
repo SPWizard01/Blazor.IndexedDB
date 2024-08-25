@@ -18,22 +18,29 @@ namespace Blazor.IndexedDB
         private readonly IJSRuntime _jsRuntime;
         private readonly DotNetObjectReference<IndexedDBManager> _dbManagerRef;
         private IJSObjectReference? _jsModule;
+        private IndexedDBJSConfig _jsConfig;
 
         /// <summary>
         /// A notification event that is raised when an action is completed
         /// </summary>
-        public event EventHandler<IndexedDBNotificationEvent>? ActionCompleted;
+        public event EventHandler<IndexedDBActionResult<object>>? ActionCompleted;
 
         /// <summary>
         /// A collection of IndexedDB databases that are defined in the application
         /// </summary>
-        public IndexedDBDatabaseCollection DBStore { get; }
+        public IndexedDBManagerConfig ManagerConfig { get; }
 
-        public IndexedDBManager(IndexedDBDatabaseCollection dbStore, IJSRuntime jsRuntime)
+        public IndexedDBManager(IndexedDBManagerConfig managerConfig, IJSRuntime jsRuntime)
         {
             _jsRuntime = jsRuntime;
             _dbManagerRef = DotNetObjectReference.Create(this);
-            DBStore = dbStore;
+            _jsConfig = new IndexedDBJSConfig
+            {
+                DotNetReference = _dbManagerRef,
+                SendNotifications = managerConfig.Config.SendNotifications,
+                SendNotificationsFromJS = managerConfig.Config.SendNotificationsFromJS
+            };
+            ManagerConfig = managerConfig;
         }
         /// <summary>
         /// Opens the IndexedDB defined in the DbStore. Under the covers will create the database if it does not exist
@@ -42,7 +49,7 @@ namespace Blazor.IndexedDB
         /// <returns></returns>
         public Task<List<IndexedDBActionResult<string?>>> OpenDb(string dbName)
         {
-            return OpenDb(DBStore.First(s => s.Name == dbName));
+            return OpenDb(ManagerConfig.Databases.First(s => s.Name == dbName));
         }
         public async Task<List<IndexedDBActionResult<string?>>> OpenDb(IndexedDBDatabase db)
         {
@@ -99,7 +106,7 @@ namespace Blazor.IndexedDB
 
             var result = await CallJavaScript<string>(IndexedDBJSModuleMethod.OpenDb, db.Name);
 
-            RaiseNotification(IndexDBActionOutcome.TableCreated, $"new store {storeSchema.Name} added");
+            //RaiseNotification(IndexDBActionOutcome.TableCreated, $"new store {storeSchema.Name} added");
         }
 
         /// <summary>
@@ -161,7 +168,7 @@ namespace Blazor.IndexedDB
         /// <param name="searchQuery"></param>
         /// <param name="direction"></param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> OpenCursor<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection? direction)
+        public async Task<IndexedDBActionResult<TResult>> OpenCursor<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection? direction = null)
         {
             return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.OpenCursor, searchQuery, direction);
         }
@@ -208,6 +215,19 @@ namespace Blazor.IndexedDB
         /// <summary>
         /// Closes all cursors opened by <see cref="OpenCursor"/> for a given database
         /// <para>
+        /// Parameter <paramref name="searchQuery"/> should be the same as the one used in OpenCursor
+        /// </para>
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="searchQuery"></param>
+        /// <returns></returns>
+        public async Task<IndexedDBActionResult<string?>> CloseAllCursors(IndexedDBObjectBase searchQuery)
+        {
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseAllCursors, searchQuery);
+        }
+        /// <summary>
+        /// Closes all cursors opened by <see cref="OpenCursor"/> for a given database
+        /// <para>
         /// Parameter <paramref name="databaseName"/> should be the same as the one used in OpenCursor
         /// </para>
         /// </summary>
@@ -216,7 +236,7 @@ namespace Blazor.IndexedDB
         /// <returns></returns>
         public async Task<IndexedDBActionResult<string?>> CloseAllCursors(string databaseName)
         {
-            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseAllCursors, databaseName);
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseAllCursors, new IndexedDBObjectBase() { DatabaseName = databaseName, StoreName = "" });
         }
 
 
@@ -226,7 +246,7 @@ namespace Blazor.IndexedDB
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery">an instance of StoreIndexQuery</param>
         /// <returns></returns>
-        public async Task<IndexedDBActionResult<TResult>> IterateRecords<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection direction)
+        public async Task<IndexedDBActionResult<TResult>> IterateRecords<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection? direction = null)
         {
             return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecords, searchQuery, direction);
         }
@@ -255,7 +275,7 @@ namespace Blazor.IndexedDB
         }
 
         /// <summary>
-        /// Gets all of the keys that match the query
+        /// Gets all of the primary keys that match the query
         /// </summary>
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
@@ -267,7 +287,7 @@ namespace Blazor.IndexedDB
         }
 
         /// <summary>
-        /// Gets all of the keys that match the query
+        /// Gets first primary key that match the query
         /// </summary>
         /// <typeparam name="TResult"></typeparam>
         /// <param name="searchQuery"></param>
@@ -285,15 +305,10 @@ namespace Blazor.IndexedDB
             if (_jsModule != null) return;
             var assemblyName = GetType().Assembly.GetName().Name;
             _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", $"./_content/{assemblyName}/client.js");
-            await _jsModule.InvokeVoidAsync($"{IndexedDBJSModuleMethod.InitIndexedDBManager}", _dbManagerRef);
+            await _jsModule.InvokeVoidAsync($"{IndexedDBJSModuleMethod.InitIndexedDBManager}", _jsConfig);
         }
 
         private async Task<IndexedDBActionResult<TResult>> CallJavaScript<TResult>(IndexedDBJSModuleMethod functionName, params object[] args)
-        {
-            await EnsureModule();
-            return await _jsModule!.InvokeAsync<IndexedDBActionResult<TResult>>($"IDBManager.{functionName}", args);
-        }
-        public async Task<IndexedDBActionResult<TResult>> CallJavaScriptDebug<TResult>(string functionName, params object[] args)
         {
             await EnsureModule();
             return await _jsModule!.InvokeAsync<IndexedDBActionResult<TResult>>($"IDBManager.{functionName}", args);
@@ -312,17 +327,17 @@ namespace Blazor.IndexedDB
         #endregion
 
 
-        private void RaiseNotification(IndexDBActionOutcome outcome, string message)
-        {
-            Console.WriteLine($".NET Outcome: {outcome}, Message: {message}");
-            ActionCompleted?.Invoke(this, new IndexedDBNotificationEvent { Outcome = outcome, Message = message });
-        }
+        //private void RaiseNotification(IndexDBActionOutcome outcome, string message)
+        //{
+        //    Console.WriteLine($".NET Outcome: {outcome}, Message: {message}");
+        //    ActionCompleted?.Invoke(this, new IndexedDBNotificationEvent { Outcome = outcome, Message = message });
+        //}
 
         [JSInvokable]
-        public void RaiseNotificationFromJS(string outcome, string message)
+        public void RaiseNotificationFromJS(IndexedDBActionResult<object> result)
         {
-            Console.WriteLine($"JS Outcome: {outcome}, Message: {message}");
-            ActionCompleted?.Invoke(this, new IndexedDBNotificationEvent { Outcome = Enum.Parse<IndexDBActionOutcome>(outcome), Message = message });
+            Console.WriteLine($"JS Outcome: {result.Type}, Message: {result.Message}");
+            ActionCompleted?.Invoke(this, result);
         }
     }
 }

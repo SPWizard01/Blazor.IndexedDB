@@ -27,5 +27,11 @@
         {
             return new IndexedDBQueryValidKey(value);
         }
+
+
+        public static IndexedDBQueryNoQuery NoQuery()
+        {
+            return new IndexedDBQueryNoQuery();
+        }
     }
 }

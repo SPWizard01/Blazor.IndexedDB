@@ -1,13 +1,5 @@
-﻿using System;
-
-namespace Blazor.IndexedDB
+﻿namespace Blazor.IndexedDB
 {
-
-    public class IndexedDBNotificationEvent : EventArgs
-    {
-        public IndexDBActionOutcome Outcome { get; set; }
-        public string Message { get; set; }
-    }
 
     public enum IndexDBActionOutcome
     {

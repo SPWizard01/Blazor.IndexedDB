@@ -1,11 +1,10 @@
-﻿@page "/indexed-db"
+﻿@page "/indexed-db-primarykey"
 
 @using Blazor.IndexedDB.Models.JS
 @using Blazor.IndexedDB.Models.Query
 @using Blazor.IndexedDB.Models.Record
 @using Blazor.IndexedDB.Server.Models
 @using Blazor.IndexedDB.Models
-@implements IDisposable
 @inject IndexedDBManager DbManager
 @inject IDialogService DialogService
 <div>
@@ -36,6 +35,9 @@
             }
         </MudSelect>
         <MudButton OnClick="OpenDatabaseAsync" Variant="Variant.Outlined">Open Database</MudButton>
+        <MudButton Disabled="SelectedDatabase == null || SelectedStore == null" OnClick="GetRecords" Variant="Variant.Outlined">Get Records</MudButton>
+        <MudButton Disabled="SelectedStore == null" OnClick="ClearStore" Variant="Variant.Outlined">Clear Store</MudButton>
+        <MudButton Disabled="SelectedDatabase == null || SelectedStore == null" OnClick="GenerateData" Variant="Variant.Outlined">Generate Data</MudButton>
     </MudStack>
     <MudPaper Outlined="true" Class="pa-2 ma-2">
         <MudText Typo="Typo.h6">Search Records</MudText>
@@ -46,12 +48,6 @@
                     @foreach (var searchValue in searchValueAs)
                     {
                         <MudSelectItem Value="searchValue">@searchValue</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudSelect T="IndexedDBIndex" Value="SelectedIndex" ValueChanged="SelectedIndexChanged" Label="Index" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
-                    @foreach (var index in SelectedStore?.Indexes ?? [])
-                    {
-                        <MudSelectItem Value="index">@index.Name</MudSelectItem>
                     }
                 </MudSelect>
                 <MudSelect T="string" @bind-Value="SelectedMethod" Label="Method" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
@@ -154,6 +150,7 @@
             </RowTemplate>
         </MudTable>
     }
+
 </div>
 @code {
     // [Inject]
@@ -169,7 +166,6 @@
     // int SelectedRowNumber { get; set; } = -1;
     IndexedDBDatabase? SelectedDatabase { get; set; }
     IndexedDBStoreSchema? SelectedStore { get; set; }
-    IndexedDBIndex? SelectedIndex { get; set; }
     IndexedDBRecord<List<Person>>? People { get; set; }
     List<Vehicle> Vehicles { get; set; } = new();
     Vehicle? CurrentVehicle { get; set; }
@@ -201,15 +197,12 @@
         SelectedStore = selected;
     }
 
-    void SelectedIndexChanged(IndexedDBIndex selected)
-    {
-        SelectedIndex = selected;
-    }
 
     void SelectedSearchValueTypeChanged(string selected)
     {
         SelectedSearchValueType = selected;
     }
+
 
 
     async Task GenerateData()
@@ -260,11 +253,6 @@
         //DbStore.Stores.First().Name;
     }
 
-    public void Dispose()
-    {
-        DbManager.ActionCompleted -= OnIndexedDbNotification;
-    }
-
     protected async Task OpenDatabaseAsync()
     {
         if (SelectedDatabase == null)
@@ -276,25 +264,42 @@
         StateHasChanged();
     }
 
-    protected List<string>
-    GetIndexes()
+
+    protected async void GetRecords()
     {
-        return DbManager.ManagerConfig.Databases.First().Stores[0].Indexes.Select(idx => idx.Name).ToList();
-    }
+        if (SelectedDatabase == null || SelectedStore == null)
+        {
+            return;
+        }
+        if (SelectedStore.Name == "Employees")
+        {
+            var results = await DbManager.GetAllRecords<Person>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
 
-
-    protected async Task AddNewStore()
-    {
-        var db = DbManager.ManagerConfig.Databases.First();
-
-        var newStoreSchema = new IndexedDBStoreSchema
+            if (results != null && results.Result.Data != null && results.Result.Data.Any())
             {
-                Name = NewStoreName,
-                PrimaryKey = new IndexedDBIndex { Name = "id", KeyPath = ["id"], Auto = true },
-            };
+                People = results.Result;
+            }
+            else
+            {
+                People = null;
+                Message = "No Records found";
+            }
+        }
+        else
+        {
+            var results = await DbManager.GetAllRecords<Vehicle>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+            if (results != null && results.Result.Data != null && results.Result.Data.Any())
+            {
+                Vehicles = results.Result.Data.ToList();
+            }
+            else
+            {
+                Vehicles.Clear();
+                Message = "No Records found";
+            }
+        }
 
-        await DbManager.AddNewStore(db, newStoreSchema);
-        await DbManager.GetDatabaseInfo(db);
+        StateHasChanged();
     }
 
     private void OnIndexedDbNotification(object? sender, IndexedDBActionResult<object> args)
@@ -302,11 +307,24 @@
         Message = args.Message;
     }
 
-    
+
+
+
+    protected async Task ClearStore()
+    {
+        if (SelectedDatabase == null || SelectedStore == null)
+        {
+            return;
+        }
+        await DbManager.ClearStore(new() { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+        GetRecords();
+    }
+
 
     protected async Task SearchForRecords()
     {
         var queryValue = HelperMethods.GetQuery(SelectedQuery, SelectedSearchValueType, SimpleSearchString, BoundLowerString, BoundUpperString, BoundExcludeLower, BoundExcludeUpper, LowerSearchString, LowerExcludeLower, UpperSearchString, UpperExcludeUpper, OnlyQuerySearchString);
-        await HelperMethods.SearchForRecords(DbManager, SelectedMethod, SelectedDatabase?.Name, SelectedStore?.Name, SelectedIndex?.Name ?? "", queryValue);
+        await HelperMethods.SearchForRecords(DbManager, SelectedMethod, SelectedDatabase?.Name, SelectedStore?.Name, "", queryValue);
+
     }
 }

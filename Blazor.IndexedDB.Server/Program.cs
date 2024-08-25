@@ -17,6 +17,8 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 builder.Services.AddIndexedDB(dbStore =>
 {
+    dbStore.Config.SendNotificationsFromJS = true;
+    dbStore.Config.SendNotifications = true;
     var firstDb = new IndexedDBDatabase("TheFactory")
     {
         Version = 1
@@ -54,8 +56,8 @@ builder.Services.AddIndexedDB(dbStore =>
                         new IndexedDBIndex{Name="IndexReviews", KeyPath = ["reviews"], MultiEntry=true},
                     ]
     });
-    dbStore.Add(firstDb);
-    dbStore.Add(secondDb);
+    dbStore.Databases.Add(firstDb);
+    dbStore.Databases.Add(secondDb);
 });
 var app = builder.Build();
 

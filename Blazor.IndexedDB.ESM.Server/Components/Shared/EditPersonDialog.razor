@@ -1,0 +1,34 @@
+﻿@using Blazor.IndexedDB.ESM.Models
+@using Blazor.IndexedDB.ESM.Models.Record
+@using Blazor.IndexedDB.ESM.Server.Models
+<MudDialog>
+    <DialogContent>
+        <MudPaper Class="pa-4">
+            <MudText>Id: @Person.Data.Id</MudText>
+            <MudTextField Label="First Name" @bind-Value="Person.Data.FirstName" />
+            <MudTextField Label="Last Name" @bind-Value="Person.Data.LastName" />
+            <MudTextField Label="SSN" @bind-Value="Person.Data.Ssn" />
+
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter]
+    public required MudDialogInstance MudDialog { get; set; }
+
+    [Parameter]
+    public required IndexedDBRecord<Person> Person { get; set; }
+    [Parameter]
+    public required IndexedDBManager Manager { get; set; }
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Save()
+    {
+        var result = await Manager.UpdateRecord<Person>(Person.ToAction());
+        MudDialog.Close(DialogResult.Ok(result));
+    }
+}

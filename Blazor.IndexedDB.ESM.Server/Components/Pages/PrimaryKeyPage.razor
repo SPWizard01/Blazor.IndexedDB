@@ -1,0 +1,100 @@
+﻿@page "/indexed-db-primarykey"
+
+@using Blazor.IndexedDB.ESM.Models.JS
+@using Blazor.IndexedDB.ESM.Models.Query
+@using Blazor.IndexedDB.ESM.Models.Record
+@using Blazor.IndexedDB.ESM.Server.Components.Shared
+@using Blazor.IndexedDB.ESM.Server.Models
+@using Blazor.IndexedDB.ESM.Models
+@inject IndexedDBManager DbManager
+@inject IDialogService DialogService
+<div>
+     <Notifications DbManager="DbManager" />
+    <MudStack Row="true" Class="pa-2 ma-2" Justify="Justify.SpaceBetween">
+        <DatabaseActions DbManager="DbManager" @bind-Database="SelectedDatabase" @bind-Store="SelectedStore" />
+    </MudStack>
+    <MudPaper Outlined="true" Class="pa-2 ma-2">
+        <MudText Typo="Typo.h6">Search Records</MudText>
+        <MudStack Row="true" Justify="Justify.FlexStart">
+            <MudStack>
+                <MethodSearch OnSearch="SearchForRecords" />
+            </MudStack>
+            <MudStack>
+                <SelectedQuery @bind-QueryValue="QueryValue" />
+            </MudStack>
+
+        </MudStack>
+    </MudPaper>
+    @if (SelectedStore?.Name == "Employees")
+    {
+        <PeopleTable People="@People" DialogService="@DialogService" DbManager="@DbManager" />
+    }
+
+    @if (SelectedStore?.Name == "Vehicles")
+    {
+        <VehicleTable Vehicles="@Vehicles" DialogService="@DialogService" DbManager="@DbManager" />
+
+    }
+
+</div>
+@code {
+    // [Inject]
+    // public required IndexedDBDatabase DbStore { get; set; }
+    // @inject DbStore DbStore
+
+
+    IndexedDBDatabase? SelectedDatabase { get; set; }
+    IndexedDBStoreSchema? SelectedStore { get; set; }
+    IndexedDBRecord<List<Person>>? People { get; set; }
+    IndexedDBRecord<List<Vehicle>>? Vehicles { get; set; }
+
+    IIndexedDBQuery? QueryValue { get; set; }
+
+
+    protected async void GetRecords()
+    {
+        if (SelectedDatabase == null || SelectedStore == null)
+        {
+            return;
+        }
+        if (SelectedStore.Name == "Employees")
+        {
+            var results = await DbManager.GetAllRecords<Person>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+
+            if (results != null && results.Result.Data != null && results.Result.Data.Any())
+            {
+                People = results.Result;
+            }
+            else
+            {
+                People = null;
+            }
+        }
+        else
+        {
+            var results = await DbManager.GetAllRecords<Vehicle>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+            if (results != null && results.Result.Data != null && results.Result.Data.Any())
+            {
+                Vehicles = results.Result;
+            }
+            else
+            {
+                Vehicles = null;
+            }
+        }
+
+        StateHasChanged();
+    }
+
+
+
+
+    protected async Task SearchForRecords(string selectedMethod)
+    {
+        if (QueryValue == null)
+        {
+            return;
+        }
+        await HelperMethods.SearchForRecords(DbManager, selectedMethod, SelectedDatabase?.Name, SelectedStore?.Name, "", QueryValue);
+    }
+}

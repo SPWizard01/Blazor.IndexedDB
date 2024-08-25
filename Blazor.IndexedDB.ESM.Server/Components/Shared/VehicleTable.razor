@@ -1,0 +1,150 @@
+﻿@using Blazor.IndexedDB.ESM.Models
+@using Blazor.IndexedDB.ESM.Models.Query
+@using Blazor.IndexedDB.ESM.Models.Record
+@using Blazor.IndexedDB.ESM.Server.Models
+
+@if (Vehicles != null && Vehicles.Data != null && Vehicles.Data.Count > 0)
+{
+    <MudTable T="Vehicle" Dense="true" Height="500px" Items="@Vehicles.Data" Hover="true" Breakpoint="Breakpoint.Sm"
+              LoadingProgressColor="Color.Info"
+              FixedHeader="true"
+              SelectedItem="@Selected"
+              SelectedItemChanged="SelectedChanged"
+              RowClassFunc="SelectedRowClassFunc">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Employees</MudText>
+            <MudSpacer />
+            <MudButtonGroup>
+                <MudButton Disabled="Selected == null" OnClick="EditVehicle">Edit</MudButton>
+                <MudButton Disabled="Selected == null" OnClick="DeleteVehicleRecord">Delete</MudButton>
+            </MudButtonGroup>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Id</MudTh>
+            <MudTh>Make</MudTh>
+            <MudTh>Model</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Fuel</MudTh>
+            <MudTh>Year</MudTh>
+            <MudTh>VIN</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Nr">@context.Id</MudTd>
+            <MudTd DataLabel="Make">@context.Make</MudTd>
+            <MudTd DataLabel="Model">@context.Model</MudTd>
+            <MudTd DataLabel="Type">@context.Type</MudTd>
+            <MudTd DataLabel="Fuel">@context.FuelType</MudTd>
+            <MudTd DataLabel="Year">@context.ReleaseYear</MudTd>
+            <MudTd DataLabel="VIN">@context.Vin</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+@code {
+    [Parameter]
+    public required IndexedDBRecord<List<Vehicle>> Vehicles { get; set; }
+    [Parameter]
+    public required IDialogService DialogService { get; set; }
+    [Parameter]
+    public required IndexedDBManager DbManager { get; set; }
+    Vehicle? Selected { get; set; }
+
+
+    protected async void AddRecord()
+    {
+        var newRecord = new IndexedDBRecord<Vehicle>
+            {
+                DatabaseName = Vehicles.DatabaseName,
+                StoreName = Vehicles.StoreName,
+                Data = new()
+            };
+
+
+        if (newRecord.Data.Id.HasValue)
+        {
+            await DbManager.UpdateRecord(newRecord.ToAction());
+        }
+        else
+        {
+
+            var result = await DbManager.AddRecord(newRecord.ToAction());
+            if (result is not null && result.Result.Data != null)
+                Vehicles.Data.Add(result.Result.Data);
+        }
+
+
+
+        Selected = null;
+
+        // GetRecords();
+    }
+
+
+    void SelectedChanged(Vehicle sender)
+    {
+        Selected = sender;
+    }
+
+
+    private string SelectedRowClassFunc(Vehicle element, int rowNumber)
+    {
+        // if (SelectedRowNumber == rowNumber)
+        // {
+        //     SelectedRowNumber = -1;
+        //     return string.Empty;
+        // }
+        if (Selected != null && Selected.Equals(element))
+        {
+            return "selected";
+        }
+        // else if (mudTable.SelectedItem != null && mudTable.SelectedItem.Equals(element))
+        // {
+        //     selectedRowNumber = rowNumber;
+        //     clickedEvents.Add($"Selected Row: {rowNumber}");
+        //     return "selected";
+        // }
+        // else
+        return string.Empty;
+
+    }
+
+
+    protected async Task EditVehicle()
+    {
+        if (Selected == null)
+        {
+            return;
+        }
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dParam = new DialogParameters<EditPersonDialog>() {
+            // { p => p.Person, Vehicles.ToRecord(Selected) },
+            // { p => p.Manager, DbManager }
+        };
+
+
+        var result = await DialogService.ShowAsync<EditPersonDialog>("Simple Dialog", dParam, options);
+
+        // try
+        // {
+        //     var query = IndexedDBQuery.ValidKeyQuery((long)SelectedPerson.Id!);
+        //     var search = new IndexedDBSearch(SelectedStore.Name, query);
+        //     var resultById = await DbManager.GetRecord<Person>(SelectedDatabase, search);
+        //     if (resultById is not null && resultById.Data is not null)
+        //         SelectedPerson = resultById.Data;
+        // }
+        // catch (Exception e)
+        // {
+
+        //     Console.WriteLine(e.Message);
+        // }
+    }
+    protected async Task DeleteVehicleRecord()
+    {
+        if (Selected == null)
+        {
+            return;
+        }
+        await DbManager.DeleteRecord(Vehicles.ToRecord(Selected).ToQueryAction(IndexedDBQueryCreator.ValidKeyQuery(Selected.Id!), true));
+        Selected = null;
+    }
+
+}

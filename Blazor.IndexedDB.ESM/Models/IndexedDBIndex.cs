@@ -15,7 +15,7 @@
         /// </summary>
         public required string[] KeyPath { get; set; }
         /// <summary>
-        /// If true, the index will be created as a string instead of an array when KeyPath has only one value.
+        /// If true, the index will be created as an array instead of a string when KeyPath has only one value.
         /// <para>Default is false.</para>
         /// </summary>
         public bool KeepAsArrayOnSingleValue { get; set; }

@@ -8,6 +8,10 @@ namespace Blazor.IndexedDB.ESM.Server
 
         public static object GetConvertedValue(string selectedSearchValueType, string value)
         {
+            if (string.IsNullOrEmpty(value))
+            {
+                return value;
+            }
             object convertedValue = value;
 
             switch (selectedSearchValueType)

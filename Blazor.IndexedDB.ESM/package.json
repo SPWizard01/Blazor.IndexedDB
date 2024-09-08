@@ -13,9 +13,9 @@
   "license": "ISC",
   "devDependencies": {
     "@microsoft/dotnet-js-interop": "^8.0.0",
-    "@types/bun": "^1.1.6",
+    "@types/bun": "^1.1.8",
     "@types/node": "^22.3.0",
-    "bun": "^1.1.24",
+    "bun": "^1.1.27",
     "esbuild": "^0.23.0",
     "tsx": "^4.17.0",
     "typescript": "^5.5.4"

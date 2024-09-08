@@ -13,8 +13,8 @@ namespace Blazor.IndexedDB.ESM.Models
         public required string Name { get; set; }
 
         /// <summary>
-        /// Defines the primary key to use. If not defined automatically creates a primary that is 
-        /// set to true for auto increment, and has the name and path of "id"
+        /// Defines the primary key to use. If not defined automatically creates a primary key that is 
+        /// set Auto to true for auto increment, and has the name and path of "id"
         /// </summary>
         public IndexedDBIndex PrimaryKey { get; set; } = new IndexedDBIndex { Name = "id", KeyPath = ["id"], Auto = true };
 

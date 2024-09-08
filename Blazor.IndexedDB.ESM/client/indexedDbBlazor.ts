@@ -91,12 +91,12 @@ export class IndexedDbManager {
     public async deleteDb(databaseName: string) {
         try {
             const db = this.getInstance(databaseName);
-            db?.instance.close();
-
-            await deleteDB(databaseName);
-            if (db) {
-                this.instances.splice(this.instances.indexOf(db), 1);
+            if (!db) {
+                return this.getFailureResult(`Database ${databaseName} not found. Is it open?`, { databaseName, storeName: "" }, "InstanceNotFound");
             }
+            db.instance.close();
+            await deleteDB(databaseName);
+            this.instances.splice(this.instances.indexOf(db), 1);
             const msg = `The database ${databaseName} has been deleted.`;
             return this.getSuccessResult(msg, undefined, { databaseName, storeName: "" }, "DatabaseDeleted");
         }
@@ -107,7 +107,11 @@ export class IndexedDbManager {
 
     public async getDatabaseInfo(databaseName: string) {
         try {
-            const instance = this.getInstance(databaseName)!.instance;
+            const db = this.getInstance(databaseName);
+            if (!db) {
+                return this.getFailureResult(`Database ${databaseName} not found. Is it open?`, { databaseName, storeName: "" }, "InstanceNotFound");
+            }
+            const instance = db.instance;   
             const dbInfo: DBInformation = {
                 name: instance.name,
                 version: instance.version,
@@ -277,7 +281,10 @@ export class IndexedDbManager {
     }
     public async closeCursor(searchData: IndexedDBQuery) {
         try {
-            const instance = this.getInstance(searchData.databaseName)!;
+            const instance = this.getInstance(searchData.databaseName);
+            if (!instance) {
+                return this.getFailureResult(`Database ${searchData.databaseName} not found. Is it open?`, searchData, "InstanceNotFound");
+            }
             const executingCursor = this.getInstanceExecutingCursor(instance, searchData);
 
             if (!executingCursor) {
@@ -294,6 +301,9 @@ export class IndexedDbManager {
     public async closeAllStoreCursors(searchData: IndexedDBObjectBase) {
         try {
             const instance = this.getInstance(searchData.databaseName)!;
+            if (!instance) {
+                return this.getFailureResult(`Database ${searchData.databaseName} not found. Is it open?`, searchData, "InstanceNotFound");
+            }
             instance.executingCursors = instance.executingCursors.filter(c =>
                 c.initialQuery.databaseName !== searchData.databaseName &&
                 c.initialQuery.storeName !== searchData.storeName
@@ -307,6 +317,9 @@ export class IndexedDbManager {
     public async closeAllCursors(searchData: IndexedDBObjectBase) {
         try {
             const instance = this.getInstance(searchData.databaseName)!;
+            if (!instance) {
+                return this.getFailureResult(`Database ${searchData.databaseName} not found. Is it open?`, searchData, "InstanceNotFound");
+            }
             instance.executingCursors = [];
             return this.getSuccessResult(``, undefined, { databaseName: searchData.databaseName, storeName: "" }, "CursorClosed");
         }
@@ -458,6 +471,9 @@ export class IndexedDbManager {
 
     private getTransaction(searchData: IndexedDBObjectBase, mode: IDBTransactionMode) {
         const db = this.getInstance(searchData.databaseName);
+        if (!db) {
+            throw new Error(`Database ${searchData.databaseName} not found. Is it open?`);
+        }
         const tx = db!.instance.transaction(searchData.storeName, mode);
         const objectStore = tx.objectStore(searchData.storeName);
         return { tx, objectStore };

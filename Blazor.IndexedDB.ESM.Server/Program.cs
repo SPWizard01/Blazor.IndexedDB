@@ -6,7 +6,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents().AddHubOptions(opts =>
+    //.AddInteractiveWebAssemblyComponents()
+    .AddInteractiveServerComponents()
+    .AddHubOptions(opts =>
     {
         opts.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10MB
     }).AddCircuitOptions(o =>
@@ -68,6 +70,10 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+else
+{
+    //app.UseWebAssemblyDebugging();
+}
 
 app.UseHttpsRedirection();
 
@@ -76,5 +82,6 @@ app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+//.AddInteractiveWebAssemblyRenderMode();
 
 app.Run();

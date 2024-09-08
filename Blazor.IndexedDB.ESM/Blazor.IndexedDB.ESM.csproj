@@ -8,14 +8,14 @@
     <DefaultItemExcludes>${DefaultItemExcludes};dist\**;node_modules\**</DefaultItemExcludes>
     <AssemblyName>Blazor.IndexedDB.ESM</AssemblyName>
     <RootNamespace>Blazor.IndexedDB.ESM</RootNamespace>
-    <Version>0.0.1</Version>
+    <Version>0.0.2</Version>
     <Authors>SPWizard</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/SPWizard01/Blazor.IndexedDB</RepositoryUrl>
     <RepositoryType>GIT</RepositoryType>
     <Description>A Blazor library for interacting with IndexedDB</Description>
     <Copyright>Copyright 2024 SPWizard01</Copyright>
-    <PackageReleaseNotes>Initial release</PackageReleaseNotes>
+    <PackageReleaseNotes>Updated error handling on JS sided.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 

@@ -3,6 +3,7 @@
 @using Blazor.IndexedDB.ESM.Models.JS
 @using Blazor.IndexedDB.ESM.Models.Query
 @using Blazor.IndexedDB.ESM.Models.Record
+@using Blazor.IndexedDB.ESM.Server.Components.Shared
 @using Blazor.IndexedDB.ESM.Server.Models
 @using Blazor.IndexedDB.ESM.Models
 @using System.Text.Json
@@ -25,9 +26,19 @@
         </MudSelect>
         <MudButton OnClick="OpenDatabaseAsync" Variant="Variant.Outlined">Open Database</MudButton>
         <MudButton Disabled="SelectedStore == null" OnClick="ClearStore" Variant="Variant.Outlined">Clear Store</MudButton>
+        <MudButton Disabled="SelectedStore == null" OnClick="GetRecords" Variant="Variant.Outlined">Get Records</MudButton>
         <MudButton Disabled="SelectedDatabase == null || SelectedStore == null" OnClick="GenerateData" Variant="Variant.Outlined">Generate Data</MudButton>
     </MudStack>
+    @if (SelectedStore?.Name == "Employees")
+    {
+        <PeopleTable People="@People" DialogService="@DialogService" DbManager="@DbManager" />
+    }
 
+    @if (SelectedStore?.Name == "Vehicles")
+    {
+        <VehicleTable Vehicles="@Vehicles" DialogService="@DialogService" DbManager="@DbManager" />
+
+    }
 </div>
 @code {
     // [Inject]
@@ -37,6 +48,8 @@
 
     IndexedDBDatabase? SelectedDatabase { get; set; }
     IndexedDBStoreSchema? SelectedStore { get; set; }
+    IndexedDBRecord<List<Person>>? People { get; set; }
+    IndexedDBRecord<List<Vehicle>>? Vehicles { get; set; }
 
     void SelectedDatabaseChanged(IndexedDBDatabase selected)
     {
@@ -63,7 +76,7 @@
         }
         if (SelectedStore.Name == "Employees")
         {
-            var num = Random.Shared.Next(100, 200);
+            var num = Random.Shared.Next(100, 300);
             for (var i = 0; i < num; i++)
             {
                 await DbManager.AddRecord<Person>(new IndexedDBRecord<Person>
@@ -76,7 +89,7 @@
         }
         else
         {
-            var num = Random.Shared.Next(100, 200);
+            var num = Random.Shared.Next(100, 300);
             for (var i = 0; i < num; i++)
             {
                 await DbManager.AddRecord<Vehicle>(new IndexedDBRecord<Vehicle>
@@ -118,4 +131,40 @@
         }
         await DbManager.ClearStore(new() { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
     }
+    protected async void GetRecords()
+    {
+        if (SelectedDatabase == null || SelectedStore == null)
+        {
+            return;
+        }
+        if (SelectedStore.Name == "Employees")
+        {
+            var results = await DbManager.GetAllRecords<Person>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+
+            if (results != null && results.Result.Data != null && results.Result.Data.Any())
+            {
+                People = results.Result;
+            }
+            else
+            {
+                People = null;
+            }
+        }
+        else
+        {
+            var results = await DbManager.GetAllRecords<Vehicle>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
+            if (results != null && results.Result.Data != null && results.Result.Data.Any())
+            {
+                Vehicles = results.Result;
+            }
+            else
+            {
+                Vehicles = null;
+            }
+        }
+
+        StateHasChanged();
+    }
+
+
 }

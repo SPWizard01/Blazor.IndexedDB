@@ -51,43 +51,6 @@
     IIndexedDBQuery? QueryValue { get; set; }
 
 
-    protected async void GetRecords()
-    {
-        if (SelectedDatabase == null || SelectedStore == null)
-        {
-            return;
-        }
-        if (SelectedStore.Name == "Employees")
-        {
-            var results = await DbManager.GetAllRecords<Person>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
-
-            if (results != null && results.Result.Data != null && results.Result.Data.Any())
-            {
-                People = results.Result;
-            }
-            else
-            {
-                People = null;
-            }
-        }
-        else
-        {
-            var results = await DbManager.GetAllRecords<Vehicle>(new(IndexedDBQueryCreator.NoQuery()) { DatabaseName = SelectedDatabase.Name, StoreName = SelectedStore.Name });
-            if (results != null && results.Result.Data != null && results.Result.Data.Any())
-            {
-                Vehicles = results.Result;
-            }
-            else
-            {
-                Vehicles = null;
-            }
-        }
-
-        StateHasChanged();
-    }
-
-
-
 
     protected async Task SearchForRecords(string selectedMethod)
     {
@@ -95,6 +58,14 @@
         {
             return;
         }
-        await HelperMethods.SearchForRecords(DbManager, selectedMethod, SelectedDatabase?.Name, SelectedStore?.Name, "", QueryValue);
+        var result = await HelperMethods.SearchForRecords(DbManager, selectedMethod, SelectedDatabase?.Name, SelectedStore?.Name, "", QueryValue);
+        if(SelectedStore?.Name == "Employees")
+        {
+            People = result.Result.Cast<List<Person>>();
+        }
+        else
+        {
+            Vehicles = result.Result.Cast<List<Vehicle>>();
+        }
     }
 }

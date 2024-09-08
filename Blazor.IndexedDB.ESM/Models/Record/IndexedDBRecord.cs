@@ -1,4 +1,5 @@
 ﻿using Blazor.IndexedDB.ESM.Models.Query;
+using System.Text.Json;
 
 namespace Blazor.IndexedDB.ESM.Models.Record
 {
@@ -40,6 +41,18 @@ namespace Blazor.IndexedDB.ESM.Models.Record
                 UseKey = useKey
 
             };
+        }
+
+        public IndexedDBRecord<TDest?> Cast<TDest>()
+        {
+            var newData = this.CastResult<TDest>();
+            return new IndexedDBRecord<TDest?>() { Data = newData, DatabaseName = DatabaseName, StoreName = StoreName };
+        }
+
+        public TDest? CastResult<TDest>()
+        {
+            var dt = JsonSerializer.Deserialize<TDest>(JsonSerializer.Serialize(Data));
+            return dt;
         }
     }
 }

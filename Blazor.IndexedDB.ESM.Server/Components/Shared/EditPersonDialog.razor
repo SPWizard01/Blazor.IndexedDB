@@ -18,14 +18,13 @@
 </MudDialog>
 @code {
     [CascadingParameter]
-    public required MudDialogInstance MudDialog { get; set; }
+    public required IDialogReference MudDialog { get; set; }
 
     [Parameter]
     public required IndexedDBRecord<Person> Person { get; set; }
     [Parameter]
     public required IndexedDBManager Manager { get; set; }
-    private void Cancel() => MudDialog.Cancel();
-
+    private void Cancel() => MudDialog.Close(DialogResult.Cancel());
     private async Task Save()
     {
         var result = await Manager.UpdateRecord<Person>(Person.ToAction());

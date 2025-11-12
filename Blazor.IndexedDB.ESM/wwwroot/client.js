@@ -1,2 +1,807 @@
-var I=(s,e)=>e.some(t=>s instanceof t),N,S;function k(){return N||(N=[IDBDatabase,IDBObjectStore,IDBIndex,IDBCursor,IDBTransaction])}function O(){return S||(S=[IDBCursor.prototype.advance,IDBCursor.prototype.continue,IDBCursor.prototype.continuePrimaryKey])}var p=new WeakMap,f=new WeakMap,g=new WeakMap;function j(s){let e=new Promise((t,r)=>{let n=()=>{s.removeEventListener("success",o),s.removeEventListener("error",i)},o=()=>{t(l(s.result)),n()},i=()=>{r(s.error),n()};s.addEventListener("success",o),s.addEventListener("error",i)});return g.set(e,s),e}function K(s){if(p.has(s))return;let e=new Promise((t,r)=>{let n=()=>{s.removeEventListener("complete",o),s.removeEventListener("error",i),s.removeEventListener("abort",i)},o=()=>{t(),n()},i=()=>{r(s.error||new DOMException("AbortError","AbortError")),n()};s.addEventListener("complete",o),s.addEventListener("error",i),s.addEventListener("abort",i)});p.set(s,e)}var R={get(s,e,t){if(s instanceof IDBTransaction){if(e==="done")return p.get(s);if(e==="store")return t.objectStoreNames[1]?void 0:t.objectStore(t.objectStoreNames[0])}return l(s[e])},set(s,e,t){return s[e]=t,!0},has(s,e){return s instanceof IDBTransaction&&(e==="done"||e==="store")?!0:e in s}};function C(s){R=s(R)}function A(s){return O().includes(s)?function(...e){return s.apply(x(this),e),l(this.request)}:function(...e){return l(s.apply(x(this),e))}}function M(s){return typeof s=="function"?A(s):(s instanceof IDBTransaction&&K(s),I(s,k())?new Proxy(s,R):s)}function l(s){if(s instanceof IDBRequest)return j(s);if(f.has(s))return f.get(s);let e=M(s);return e!==s&&(f.set(s,e),g.set(e,s)),e}var x=s=>g.get(s);function $(s,e,{blocked:t,upgrade:r,blocking:n,terminated:o}={}){let i=indexedDB.open(s,e),u=l(i);return r&&i.addEventListener("upgradeneeded",a=>{r(l(i.result),a.oldVersion,a.newVersion,l(i.transaction),a)}),t&&i.addEventListener("blocked",a=>t(a.oldVersion,a.newVersion,a)),u.then(a=>{o&&a.addEventListener("close",()=>o()),n&&a.addEventListener("versionchange",c=>n(c.oldVersion,c.newVersion,c))}).catch(()=>{}),u}function F(s,{blocked:e}={}){let t=indexedDB.deleteDatabase(s);return e&&t.addEventListener("blocked",r=>e(r.oldVersion,r)),l(t).then(()=>{})}var T=["get","getKey","getAll","getAllKeys","count"],q=["put","add","delete","clear"],b=new Map;function D(s,e){if(!(s instanceof IDBDatabase&&!(e in s)&&typeof e=="string"))return;if(b.get(e))return b.get(e);let t=e.replace(/FromIndex$/,""),r=e!==t,n=q.includes(t);if(!(t in(r?IDBIndex:IDBObjectStore).prototype)||!(n||T.includes(t)))return;let o=async function(i,...u){let a=this.transaction(i,n?"readwrite":"readonly"),c=a.store;return r&&(c=c.index(u.shift())),(await Promise.all([c[t](...u),n&&a.done]))[0]};return b.set(e,o),o}C(s=>({...s,get:(e,t,r)=>D(e,t)||s.get(e,t,r),has:(e,t)=>!!D(e,t)||s.has(e,t)}));var L=["continue","continuePrimaryKey","advance"],v={},B=new WeakMap,P=new WeakMap,V={get(s,e){if(!L.includes(e))return s[e];let t=v[e];return t||(t=v[e]=function(...r){B.set(this,P.get(this)[e](...r))}),t}};async function*_(...s){let e=this;if(e instanceof IDBCursor||(e=await e.openCursor(...s)),!e)return;e=e;let t=new Proxy(e,V);for(P.set(t,e),g.set(t,x(e));e;)yield t,e=await(B.get(t)||e.continue()),B.delete(t)}function E(s,e){return e===Symbol.asyncIterator&&I(s,[IDBIndex,IDBObjectStore,IDBCursor])||e==="iterate"&&I(s,[IDBIndex,IDBObjectStore])}C(s=>({...s,get(e,t,r){return E(e,t)?_:s.get(e,t,r)},has(e,t){return E(e,t)||s.has(e,t)}}));var w="RaiseNotificationFromJS",m=class{instances=[];_dbManagerRef;_sendNotifications=!1;constructor(e){this._dbManagerRef=e.dotNetReference,this._sendNotifications=e.sendNotificationsFromJS}async openDb(e){let t=[],r=this.getInstance(e.name);try{if(!r||r.instance.version<e.version){r&&(r.instance.close(),this.instances.splice(this.instances.indexOf(r),1));let n=await $(e.name,e.version,{upgrade:async(o,i,u,a)=>{let c=this.upgradeDatabase(o,e,i,u,a);await a.done,t.push(...c)},blocked:async(o,i,u)=>{let a=`Database upgrade blocked. Current version: ${o}, Blocked version: ${i}`;console.warn(a,u),t.push(this.getFailureResult(a,{databaseName:e.name,storeName:""},"DatabaseUpgradeBlocked"))},blocking:async(o,i,u)=>{let a=`Database upgrade blocking. Current version: ${o}, Blocked version: ${i}, trying to close db.`;console.warn(a,u);try{this.getInstance(e.name)?.instance.close();let d={databaseName:e.name,storeName:""};t.push(this.getSuccessResult(a,void 0,d,"DatabaseUpgradeBlocking"))}catch(c){let d=`Could not close db, will try again. ${c}`;console.error(d),t.push(this.getFailureResult(d,{databaseName:e.name,storeName:""},"DatabaseUpgradeBlocking"))}}});r={name:e.name,instance:n,executingCursors:[]},this.instances.push(r)}}catch(n){return t.push(this.getFailureResult(`Could not open db ${n}`,{databaseName:e.name,storeName:""},"DatabaseOpenError")),t}try{let n=await this.verifySchema(r.instance,e);t.push(...n)}catch(n){t.push(this.getFailureResult(`Could not verify schema ${n}`,{databaseName:e.name,storeName:""},"SchemaVerificationError"))}return t.some(n=>!n.success)||t.push(this.getSuccessResult(`Database ${e.name} opened`,void 0,{databaseName:e.name,storeName:""},"DatabaseOpened")),t}async deleteDb(e){try{let t=this.getInstance(e);if(!t)return this.getFailureResult(`Database ${e} not found. Is it open?`,{databaseName:e,storeName:""},"InstanceNotFound");t.instance.close(),await F(e),this.instances.splice(this.instances.indexOf(t),1);let r=`The database ${e} has been deleted.`;return this.getSuccessResult(r,void 0,{databaseName:e,storeName:""},"DatabaseDeleted")}catch(t){return this.getFailureResult(`Error deleting database: ${t}`,{databaseName:e,storeName:""},"DatabaseDeleteError")}}async getDatabaseInfo(e){try{let t=this.getInstance(e);if(!t)return this.getFailureResult(`Database ${e} not found. Is it open?`,{databaseName:e,storeName:""},"InstanceNotFound");let r=t.instance,n={name:r.name,version:r.version,storeNames:this.getStoreNames(r.objectStoreNames)};return this.getSuccessResult("Database information retrieved",n,{databaseName:r.name,storeName:""},"DatabaseInfo")}catch(t){return this.getFailureResult(`Error getting database information: ${t}`,{databaseName:e,storeName:""},"DatabaseInfoError")}}async addRecord(e){let t=e.data;try{let{tx:r,objectStore:n,idbKeyResult:o}=this.getStoreQuery(e,"readwrite");if(t=this.removePrimaryKeyPropertyIfAutoIncrement(n,t),!n.add)return this.getFailureResult("Add method not available on object store",e,"RecordQueryError");let i;if(!o.success&&e.useKey)return this.getFailureResult("Unable to update record, key not valid",e,"RecordQueryError");o.success&&e.useKey&&(i=o.result.data.value);let u=await n.add(t,i),a=await n.get(u);await r.done;let c=`Added new record with id ${u}`;return this.getSuccessResult(c,a,e,"Record")}catch(r){return this.getFailureResult(`Error adding record: ${r}`,e,"RecordQueryError")}}async updateRecord(e){try{let{tx:t,idbKeyResult:r,objectStore:n}=this.getStoreQuery(e,"readwrite");if(!n.put)return this.getFailureResult("Put method not available on object store",e,"RecordQueryError");let o;if(!r.success&&e.useKey)return this.getFailureResult("Unable to update record, key not valid",e,"RecordQueryError");r.success&&e.useKey&&(o=r.result.data.value);let i=await n.put(e.data,o),u=await n.get(i);await t.done;let a=`Updated record with id ${i}`;return this.getSuccessResult(a,u,e,"Record")}catch(t){return this.getFailureResult(`Error updating record: ${t}`,e,"RecordQueryError")}}async deleteRecord(e){try{let{tx:t,objectStore:r,idbKeyResult:n}=this.getStoreQuery(e,"readwrite");return r.delete?n.success?n.result.data.type==="NoQuery"?this.getFailureResult("Error deleting record: NoQuery is not a valid query",e,"RecordQueryError"):(await r.delete(n.result.data.value),await t.done,this.getSuccessResult(`Deleted records from store ${e.storeName}`,void 0,e,"RecordDeleted")):this.getFailureResult(`Error deleting record: ${n.message}`,e,"RecordQueryError"):this.getFailureResult("delete method not available on object store",e,"RecordQueryError")}catch(t){return this.getFailureResult(`Error deleting record: ${t}`,e,"RecordQueryError")}}async clearStore(e){try{let{tx:t,objectStore:r}=this.getTransaction(e,"readwrite");return r.clear?(await r.clear(),await t.done,this.getSuccessResult(`Store ${e.storeName} cleared`,void 0,e,"StoreCleared")):this.getFailureResult("Clear method not available on object store",e,"StoreQueryError")}catch(t){return this.getFailureResult(`Error clearing store ${e.storeName}: ${t}`,e,"StoreQueryError")}}async openCursor(e,t){try{let r=this.getQueryPath(e),{objectStore:n,tx:o,idbKeyResult:i,index:u}=this.getStoreQuery(e,"readonly");if(!i.success)return i;let a=this.getInstance(e.databaseName);if(this.getInstanceExecutingCursor(a,e))return this.getFailureResult("Another cursor is already open",e,"CursorFailure");let d=i.result.data.value,y=await(u??n).openCursor(d,t);return await o.done,y?.value?(a.executingCursors.push({initialQuery:e,cursorPosition:1,direction:t}),this.getSuccessResult(`Cursor result ${r}`,y.value,e,"CursorRecord")):this.getSuccessResult(`Cursor result ${r}`,void 0,e,"CursorClosed")}catch(r){return this.getFailureResult(`Error getting records ${r}`,e,"CursorFailure")}}async advanceCursor(e){try{let t=this.getQueryPath(e),r=this.getInstance(e.databaseName),n=this.getInstanceExecutingCursor(r,e);if(n){let{objectStore:o,tx:i,idbKeyResult:u,index:a}=this.getStoreQuery(n.initialQuery,"readonly");if(!u.success)return u;let c=u.result.data.value,y=await(await(a??o).openCursor(c,n.direction))?.advance(n.cursorPosition);return await i.done,!y||!y.value?(r.executingCursors.splice(r.executingCursors.indexOf(n),1),this.getSuccessResult(`No more records ${t}`,void 0,e,"CursorClosed")):(n.cursorPosition+=1,this.getSuccessResult(`Cursor record ${t}`,y.value,e,"CursorRecord"))}return this.getSuccessResult(`No cursor is open ${t}`,void 0,e,"CursorNotOpen")}catch(t){return this.getFailureResult(`Error getting records ${t}`,e,"CursorFailure")}}async closeCursor(e){try{let t=this.getInstance(e.databaseName);if(!t)return this.getFailureResult(`Database ${e.databaseName} not found. Is it open?`,e,"InstanceNotFound");let r=this.getInstanceExecutingCursor(t,e);return r?(t.executingCursors.splice(t.executingCursors.indexOf(r),1),this.getSuccessResult("",void 0,e,"CursorClosed")):this.getSuccessResult("No cursor is open",void 0,e,"CursorNotOpen")}catch(t){return this.getFailureResult(`Error closing cursor: ${t}`,e,"CursorFailure")}}async closeAllStoreCursors(e){try{let t=this.getInstance(e.databaseName);return t?(t.executingCursors=t.executingCursors.filter(r=>r.initialQuery.databaseName!==e.databaseName&&r.initialQuery.storeName!==e.storeName),this.getSuccessResult("",void 0,e,"CursorNoMoreRecords")):this.getFailureResult(`Database ${e.databaseName} not found. Is it open?`,e,"InstanceNotFound")}catch(t){return this.getFailureResult(`Error closing cursor: ${t}`,e,"CursorFailure")}}async closeAllCursors(e){try{let t=this.getInstance(e.databaseName);return t?(t.executingCursors=[],this.getSuccessResult("",void 0,{databaseName:e.databaseName,storeName:""},"CursorClosed")):this.getFailureResult(`Database ${e.databaseName} not found. Is it open?`,e,"InstanceNotFound")}catch(t){return this.getFailureResult(`Error closing cursor: ${t}`,{databaseName:e.databaseName,storeName:""},"CursorFailure")}}async iterateRecords(e,t){try{let r=this.getQueryPath(e),{objectStore:n,tx:o,idbKeyResult:i,index:u}=this.getStoreQuery(e,"readonly");if(!i.success)return i;let a=[],d=(u??n).iterate(i.result.data.value,t);for await(let h of d)a.push(h.value);return await o.done,this.getSuccessResult(`${a.length} records retrieved ${r}`,a,e,a.length>0?"Record":"RecordNotFound")}catch(r){return this.getFailureResult(`Error getting records ${r}`,e,"StoreQueryError")}}async getRecord(e){try{let t=this.getQueryPath(e),{objectStore:r,tx:n,idbKeyResult:o,index:i}=this.getStoreQuery(e,"readonly");if(!o.success)return o;if(o.result.data.type==="NoQuery")return this.getFailureResult("NoQuery is not a valid query",e,"RecordQueryError");let a=await(i??r).get(o.result.data.value);return await n.done,this.getSuccessResult(`${a?"1":"0"} record retrieved ${t}`,a,e,a?"Record":"RecordNotFound")}catch(t){return this.getFailureResult(`Error getting record: ${t}`,e,"StoreQueryError")}}async getAllRecords(e,t){try{let r=this.getQueryPath(e),{objectStore:n,tx:o,idbKeyResult:i,index:u}=this.getStoreQuery(e,"readonly");if(!i.success)return i;let c=await(u??n).getAll(i.result.data.value,t>0?t:void 0);return await o.done,this.getSuccessResult(`${c.length} records retrieved from ${r}`,c,e,c.length>0?"Record":"RecordNotFound")}catch(r){return this.getFailureResult(`Error getting records: ${r}`,e,"StoreQueryError")}}async getAllKeys(e,t){try{let r=this.getQueryPath(e),{objectStore:n,tx:o,idbKeyResult:i,index:u}=this.getStoreQuery(e,"readonly");if(!i.success)return i;let c=await(u??n).getAllKeys(i.result.data.value,t>0?t:void 0);return await o.done,this.getSuccessResult(`${c.length} keys retrieved from ${r}`,c,e,c.length>0?"Record":"RecordNotFound")}catch(r){return this.getFailureResult(`Error getting keys: ${r}`,e,"StoreQueryError")}}async getKey(e){try{let t=this.getQueryPath(e),{objectStore:r,tx:n,idbKeyResult:o,index:i}=this.getStoreQuery(e,"readonly");if(!o.success)return o;if(o.result.data.type==="NoQuery")return this.getFailureResult("NoQuery is not a valid query",e,"RecordQueryError");let a=await(i??r).getKey(o.result.data.value);return await n.done,this.getSuccessResult(`${a?"1":"0"} keys retrieved from ${t}`,a,e,a?"Record":"RecordNotFound")}catch(t){return this.getFailureResult(`Error getting keys: ${t}`,e,"StoreQueryError")}}getIDBKey(e){let t,r=e.queryValue;try{switch(r.queryType){case"BoundQuery":t={type:"KeyRange",value:IDBKeyRange.bound(r.lower,r.upper,r.lowerOpen,r.upperOpen)};break;case"LowerBoundQuery":t={type:"KeyRange",value:IDBKeyRange.lowerBound(r.lowerBound,r.lowerOpen)};break;case"UpperBoundQuery":t={type:"KeyRange",value:IDBKeyRange.upperBound(r.upperBound,r.upperOpen)};break;case"OnlyQuery":t={type:"KeyRange",value:IDBKeyRange.only(r.value)};break;case"ValidKeyQuery":t={type:"ValidKey",value:r.value};break;case"NoQuery":t={type:"NoQuery",value:void 0};break;default:return this.getFailureResult(`Invalid query type ${r.queryType}`,e,"IDBKeyFailure")}}catch(n){return this.getFailureResult(`Failed to create key ${n}`,e,"IDBKeyFailure")}return this.getSuccessResult("",t,e,"IDBKeyCreated")}getStoreQuery(e,t){let{tx:r,objectStore:n}=this.getTransaction(e,t),o=this.getIDBKey(e),i=e.indexName?n.index(e.indexName):void 0;return{objectStore:n,tx:r,idbKeyResult:o,index:i}}getTransaction(e,t){let r=this.getInstance(e.databaseName);if(!r)throw new Error(`Database ${e.databaseName} not found. Is it open?`);let n=r.instance.transaction(e.storeName,t),o=n.objectStore(e.storeName);return{tx:n,objectStore:o}}removePrimaryKeyPropertyIfAutoIncrement(e,t){return!e.autoIncrement||!e.keyPath||Array.isArray(e.keyPath)||Object.hasOwn(t,e.keyPath)&&delete t[e.keyPath],t}upgradeDatabase(e,t,r,n,o){let i=[];if(r<n)for(var u of t.stores){if(!e.objectStoreNames.contains(u.name)){i.push(...this.addNewStore(e,u,r,n));continue}let a=o.objectStore(u.name);for(let c of u.indexes)a.indexNames.contains(c.name)||i.push(this.createIndexForStore(c,a,r,n))}return i}async verifySchema(e,t){let r=[];if(t.stores)for(var n of t.stores){let o={databaseName:t.name,storeName:n.name};if(!e.objectStoreNames.contains(n.name)){r.push(this.getFailureResult(`Store ${n.name} not found in database`,o,"StoreNotFound"));continue}let u=e.transaction(n.name,"readonly").objectStore(n.name);for(let a of n.indexes){if(!u.indexNames.contains(a.name)){r.push(this.getFailureResult(`Index ${a.name} not found in store ${n.name}`,o,"IndexNotFound"));continue}let c=u.index(a.name);if(Array.isArray(c.keyPath))for(let d of c.keyPath)a.keyPath.includes(d)||r.push(this.getFailureResult(`Index ${a.name} keyPath does not match. Expected: ${a.keyPath}, Actual: ${c.keyPath}`,o,"IndexKeyPathMismatch"));else a.keyPath.includes(c.keyPath)||r.push(this.getFailureResult(`Index ${a.name} keyPath does not match. Expected: ${a.keyPath}, Actual: ${c.keyPath}`,o,"IndexKeyPathMismatch"))}}return r}addNewStore(e,t,r,n){let o=[],i=t.primaryKey;i||(i={name:"id",keyPath:["id"],auto:!0,multiEntry:!1,unique:!0,keepAsArrayOnSingleValue:!1});let u=i.keyPath.length==1?i.keyPath[0]:i.keyPath;try{let c=e.createObjectStore(t.name,{keyPath:u,autoIncrement:i.auto}),d={databaseName:e.name,storeName:t.name};o.push(this.getSuccessResult(`Store ${t.name} created inside ${e.name} as it was missing when upgrading from v${r} to v${n}`,void 0,d,"StoreCreated"));for(var a of t.indexes)o.push(this.createIndexForStore(a,c,r,n))}catch(c){o.push(this.getFailureResult(`Error creating store ${t.name}: ${c}`,{databaseName:e.name,storeName:t.name},"StoreCreationError"))}return o}createIndexForStore(e,t,r,n){let o=e.keyPath;if(e.keyPath.length===1&&!e.keepAsArrayOnSingleValue&&(o=e.keyPath[0]),e.multiEntry&&e.keyPath.length>1)return this.getFailureResult(`Index ${e.name} has multiEntry set to true but has multiple keyPaths. This is not supported.`,{databaseName:t.transaction.db.name,storeName:t.name},"MultiEntryIndexWithMultipleKeyPaths");e.multiEntry&&e.keyPath.length===1&&(o=e.keyPath[0]);try{t.createIndex(e.name,o,{unique:e.unique,multiEntry:e.multiEntry})}catch(u){return this.getFailureResult(`Error creating index ${e.name} for store ${t.name}: ${u}`,{databaseName:t.transaction.db.name,storeName:t.name},"IndexCreationError")}let i=`Index ${e.name} created inside ${t.name} as it was missing when upgrading from v${r} to v${n}`;return this.getSuccessResult(i,void 0,{databaseName:"",storeName:t.name},"IndexCreated")}getSuccessResult(e,t,r,n){let o={success:!0,result:{data:t,databaseName:r.databaseName,storeName:r.storeName},message:e,type:n};return this._sendNotifications&&this._dbManagerRef.invokeMethodAsync(w,o),o}getFailureResult(e,t,r){let n={success:!1,result:{data:void 0,databaseName:t.databaseName,storeName:t.storeName},message:e,type:r};return this._sendNotifications&&this._dbManagerRef.invokeMethodAsync(w,n),n}getInstance(e){return this.instances.find(t=>t.name.toLowerCase()===e.toLowerCase())}getInstanceExecutingCursor(e,t){return e.executingCursors.find(r=>r.initialQuery.databaseName===t.databaseName&&r.initialQuery.storeName===t.storeName&&r.initialQuery.indexName===t.indexName&&JSON.stringify(r.initialQuery.queryValue)===JSON.stringify(t.queryValue))}getQueryPath(e){return`${e.databaseName}->${e.storeName}${e.indexName?`->${e.indexName}`:""}`}getStoreNames(e){let t=[];for(let r of e)t.push(r);return t}};var Q,U;function te(s){Q||(Q=new m(s),U=s.dotNetReference,console.log("IndexedDbManager initialized"))}export{Q as IDBManager,te as initIndexedDbManager};
+// node_modules/idb/build/index.js
+var instanceOfAny = (object, constructors) => constructors.some((c) => object instanceof c);
+var idbProxyableTypes;
+var cursorAdvanceMethods;
+function getIdbProxyableTypes() {
+  return idbProxyableTypes || (idbProxyableTypes = [
+    IDBDatabase,
+    IDBObjectStore,
+    IDBIndex,
+    IDBCursor,
+    IDBTransaction
+  ]);
+}
+function getCursorAdvanceMethods() {
+  return cursorAdvanceMethods || (cursorAdvanceMethods = [
+    IDBCursor.prototype.advance,
+    IDBCursor.prototype.continue,
+    IDBCursor.prototype.continuePrimaryKey
+  ]);
+}
+var transactionDoneMap = new WeakMap;
+var transformCache = new WeakMap;
+var reverseTransformCache = new WeakMap;
+function promisifyRequest(request) {
+  const promise = new Promise((resolve, reject) => {
+    const unlisten = () => {
+      request.removeEventListener("success", success);
+      request.removeEventListener("error", error);
+    };
+    const success = () => {
+      resolve(wrap(request.result));
+      unlisten();
+    };
+    const error = () => {
+      reject(request.error);
+      unlisten();
+    };
+    request.addEventListener("success", success);
+    request.addEventListener("error", error);
+  });
+  reverseTransformCache.set(promise, request);
+  return promise;
+}
+function cacheDonePromiseForTransaction(tx) {
+  if (transactionDoneMap.has(tx))
+    return;
+  const done = new Promise((resolve, reject) => {
+    const unlisten = () => {
+      tx.removeEventListener("complete", complete);
+      tx.removeEventListener("error", error);
+      tx.removeEventListener("abort", error);
+    };
+    const complete = () => {
+      resolve();
+      unlisten();
+    };
+    const error = () => {
+      reject(tx.error || new DOMException("AbortError", "AbortError"));
+      unlisten();
+    };
+    tx.addEventListener("complete", complete);
+    tx.addEventListener("error", error);
+    tx.addEventListener("abort", error);
+  });
+  transactionDoneMap.set(tx, done);
+}
+var idbProxyTraps = {
+  get(target, prop, receiver) {
+    if (target instanceof IDBTransaction) {
+      if (prop === "done")
+        return transactionDoneMap.get(target);
+      if (prop === "store") {
+        return receiver.objectStoreNames[1] ? undefined : receiver.objectStore(receiver.objectStoreNames[0]);
+      }
+    }
+    return wrap(target[prop]);
+  },
+  set(target, prop, value) {
+    target[prop] = value;
+    return true;
+  },
+  has(target, prop) {
+    if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) {
+      return true;
+    }
+    return prop in target;
+  }
+};
+function replaceTraps(callback) {
+  idbProxyTraps = callback(idbProxyTraps);
+}
+function wrapFunction(func) {
+  if (getCursorAdvanceMethods().includes(func)) {
+    return function(...args) {
+      func.apply(unwrap(this), args);
+      return wrap(this.request);
+    };
+  }
+  return function(...args) {
+    return wrap(func.apply(unwrap(this), args));
+  };
+}
+function transformCachableValue(value) {
+  if (typeof value === "function")
+    return wrapFunction(value);
+  if (value instanceof IDBTransaction)
+    cacheDonePromiseForTransaction(value);
+  if (instanceOfAny(value, getIdbProxyableTypes()))
+    return new Proxy(value, idbProxyTraps);
+  return value;
+}
+function wrap(value) {
+  if (value instanceof IDBRequest)
+    return promisifyRequest(value);
+  if (transformCache.has(value))
+    return transformCache.get(value);
+  const newValue = transformCachableValue(value);
+  if (newValue !== value) {
+    transformCache.set(value, newValue);
+    reverseTransformCache.set(newValue, value);
+  }
+  return newValue;
+}
+var unwrap = (value) => reverseTransformCache.get(value);
+function openDB(name, version, { blocked, upgrade, blocking, terminated } = {}) {
+  const request = indexedDB.open(name, version);
+  const openPromise = wrap(request);
+  if (upgrade) {
+    request.addEventListener("upgradeneeded", (event) => {
+      upgrade(wrap(request.result), event.oldVersion, event.newVersion, wrap(request.transaction), event);
+    });
+  }
+  if (blocked) {
+    request.addEventListener("blocked", (event) => blocked(event.oldVersion, event.newVersion, event));
+  }
+  openPromise.then((db) => {
+    if (terminated)
+      db.addEventListener("close", () => terminated());
+    if (blocking) {
+      db.addEventListener("versionchange", (event) => blocking(event.oldVersion, event.newVersion, event));
+    }
+  }).catch(() => {});
+  return openPromise;
+}
+function deleteDB(name, { blocked } = {}) {
+  const request = indexedDB.deleteDatabase(name);
+  if (blocked) {
+    request.addEventListener("blocked", (event) => blocked(event.oldVersion, event));
+  }
+  return wrap(request).then(() => {
+    return;
+  });
+}
+var readMethods = ["get", "getKey", "getAll", "getAllKeys", "count"];
+var writeMethods = ["put", "add", "delete", "clear"];
+var cachedMethods = new Map;
+function getMethod(target, prop) {
+  if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) {
+    return;
+  }
+  if (cachedMethods.get(prop))
+    return cachedMethods.get(prop);
+  const targetFuncName = prop.replace(/FromIndex$/, "");
+  const useIndex = prop !== targetFuncName;
+  const isWrite = writeMethods.includes(targetFuncName);
+  if (!(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))) {
+    return;
+  }
+  const method = async function(storeName, ...args) {
+    const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
+    let target2 = tx.store;
+    if (useIndex)
+      target2 = target2.index(args.shift());
+    return (await Promise.all([
+      target2[targetFuncName](...args),
+      isWrite && tx.done
+    ]))[0];
+  };
+  cachedMethods.set(prop, method);
+  return method;
+}
+replaceTraps((oldTraps) => ({
+  ...oldTraps,
+  get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
+  has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
+}));
+var advanceMethodProps = ["continue", "continuePrimaryKey", "advance"];
+var methodMap = {};
+var advanceResults = new WeakMap;
+var ittrProxiedCursorToOriginalProxy = new WeakMap;
+var cursorIteratorTraps = {
+  get(target, prop) {
+    if (!advanceMethodProps.includes(prop))
+      return target[prop];
+    let cachedFunc = methodMap[prop];
+    if (!cachedFunc) {
+      cachedFunc = methodMap[prop] = function(...args) {
+        advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
+      };
+    }
+    return cachedFunc;
+  }
+};
+async function* iterate(...args) {
+  let cursor = this;
+  if (!(cursor instanceof IDBCursor)) {
+    cursor = await cursor.openCursor(...args);
+  }
+  if (!cursor)
+    return;
+  cursor = cursor;
+  const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
+  ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
+  reverseTransformCache.set(proxiedCursor, unwrap(cursor));
+  while (cursor) {
+    yield proxiedCursor;
+    cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
+    advanceResults.delete(proxiedCursor);
+  }
+}
+function isIteratorProp(target, prop) {
+  return prop === Symbol.asyncIterator && instanceOfAny(target, [IDBIndex, IDBObjectStore, IDBCursor]) || prop === "iterate" && instanceOfAny(target, [IDBIndex, IDBObjectStore]);
+}
+replaceTraps((oldTraps) => ({
+  ...oldTraps,
+  get(target, prop, receiver) {
+    if (isIteratorProp(target, prop))
+      return iterate;
+    return oldTraps.get(target, prop, receiver);
+  },
+  has(target, prop) {
+    return isIteratorProp(target, prop) || oldTraps.has(target, prop);
+  }
+}));
+
+// client/indexedDbBlazor.ts
+var RAISE_EVENT_METHOD = "RaiseNotificationFromJS";
+
+class IndexedDbManager {
+  instances = [];
+  _dbManagerRef;
+  _sendNotifications = false;
+  constructor(instanceConfig) {
+    this._dbManagerRef = instanceConfig.dotNetReference;
+    this._sendNotifications = instanceConfig.sendNotificationsFromJS;
+  }
+  async openDb(indexedDatabase) {
+    const dbOpenOutcomes = [];
+    let dbInstance = this.getInstance(indexedDatabase.name);
+    try {
+      if (!dbInstance || dbInstance.instance.version < indexedDatabase.version) {
+        if (dbInstance) {
+          dbInstance.instance.close();
+          this.instances.splice(this.instances.indexOf(dbInstance), 1);
+        }
+        const instance = await openDB(indexedDatabase.name, indexedDatabase.version, {
+          upgrade: async (database, oldVersion, newVersion, transaction) => {
+            const outcomes = this.upgradeDatabase(database, indexedDatabase, oldVersion, newVersion, transaction);
+            await transaction.done;
+            dbOpenOutcomes.push(...outcomes);
+          },
+          blocked: async (currentVersion, blockedVersion, event) => {
+            const message = `Database upgrade blocked. Current version: ${currentVersion}, Blocked version: ${blockedVersion}`;
+            console.warn(message, event);
+            dbOpenOutcomes.push(this.getFailureResult(message, { databaseName: indexedDatabase.name, storeName: "" }, "DatabaseUpgradeBlocked"));
+          },
+          blocking: async (currentVersion, blockedVersion, event) => {
+            const message = `Database upgrade blocking. Current version: ${currentVersion}, Blocked version: ${blockedVersion}, trying to close db.`;
+            console.warn(message, event);
+            try {
+              let blockingInstance = this.getInstance(indexedDatabase.name);
+              blockingInstance?.instance.close();
+              const baseInfo = { databaseName: indexedDatabase.name, storeName: "" };
+              dbOpenOutcomes.push(this.getSuccessResult(message, undefined, baseInfo, "DatabaseUpgradeBlocking"));
+            } catch (e) {
+              const message2 = `Could not close db, will try again. ${e}`;
+              console.error(message2);
+              dbOpenOutcomes.push(this.getFailureResult(message2, { databaseName: indexedDatabase.name, storeName: "" }, "DatabaseUpgradeBlocking"));
+            }
+          }
+        });
+        dbInstance = { name: indexedDatabase.name, instance, executingCursors: [] };
+        this.instances.push(dbInstance);
+      }
+    } catch (e) {
+      dbOpenOutcomes.push(this.getFailureResult(`Could not open db ${e}`, { databaseName: indexedDatabase.name, storeName: "" }, "DatabaseOpenError"));
+      return dbOpenOutcomes;
+    }
+    try {
+      const result = await this.verifySchema(dbInstance.instance, indexedDatabase);
+      dbOpenOutcomes.push(...result);
+    } catch (e) {
+      dbOpenOutcomes.push(this.getFailureResult(`Could not verify schema ${e}`, { databaseName: indexedDatabase.name, storeName: "" }, "SchemaVerificationError"));
+    }
+    if (!dbOpenOutcomes.some((o) => !o.success)) {
+      dbOpenOutcomes.push(this.getSuccessResult(`Database ${indexedDatabase.name} opened`, undefined, { databaseName: indexedDatabase.name, storeName: "" }, "DatabaseOpened"));
+    }
+    return dbOpenOutcomes;
+  }
+  async deleteDb(databaseName) {
+    try {
+      const db = this.getInstance(databaseName);
+      if (!db) {
+        return this.getFailureResult(`Database ${databaseName} not found. Is it open?`, { databaseName, storeName: "" }, "InstanceNotFound");
+      }
+      db.instance.close();
+      await deleteDB(databaseName);
+      this.instances.splice(this.instances.indexOf(db), 1);
+      const msg = `The database ${databaseName} has been deleted.`;
+      return this.getSuccessResult(msg, undefined, { databaseName, storeName: "" }, "DatabaseDeleted");
+    } catch (e) {
+      return this.getFailureResult(`Error deleting database: ${e}`, { databaseName, storeName: "" }, "DatabaseDeleteError");
+    }
+  }
+  async getDatabaseInfo(databaseName) {
+    try {
+      const db = this.getInstance(databaseName);
+      if (!db) {
+        return this.getFailureResult(`Database ${databaseName} not found. Is it open?`, { databaseName, storeName: "" }, "InstanceNotFound");
+      }
+      const instance = db.instance;
+      const dbInfo = {
+        name: instance.name,
+        version: instance.version,
+        storeNames: this.getStoreNames(instance.objectStoreNames)
+      };
+      return this.getSuccessResult("Database information retrieved", dbInfo, { databaseName: instance.name, storeName: "" }, "DatabaseInfo");
+    } catch (e) {
+      return this.getFailureResult(`Error getting database information: ${e}`, { databaseName, storeName: "" }, "DatabaseInfoError");
+    }
+  }
+  async addRecord(record) {
+    let itemToSave = record.data;
+    try {
+      const { tx, objectStore, idbKeyResult } = this.getStoreQuery(record, "readwrite");
+      itemToSave = this.removePrimaryKeyPropertyIfAutoIncrement(objectStore, itemToSave);
+      if (!objectStore.add) {
+        return this.getFailureResult("Add method not available on object store", record, "RecordQueryError");
+      }
+      let key = undefined;
+      if (!idbKeyResult.success && record.useKey) {
+        return this.getFailureResult("Unable to update record, key not valid", record, "RecordQueryError");
+      }
+      if (idbKeyResult.success && record.useKey) {
+        key = idbKeyResult.result.data.value;
+      }
+      const result = await objectStore.add(itemToSave, key);
+      const dbResult = await objectStore.get(result);
+      await tx.done;
+      const msg = `Added new record with id ${result}`;
+      return this.getSuccessResult(msg, dbResult, record, "Record");
+    } catch (e) {
+      return this.getFailureResult(`Error adding record: ${e}`, record, "RecordQueryError");
+    }
+  }
+  async updateRecord(record) {
+    try {
+      const { tx, idbKeyResult, objectStore } = this.getStoreQuery(record, "readwrite");
+      if (!objectStore.put) {
+        return this.getFailureResult("Put method not available on object store", record, "RecordQueryError");
+      }
+      let key = undefined;
+      if (!idbKeyResult.success && record.useKey) {
+        return this.getFailureResult("Unable to update record, key not valid", record, "RecordQueryError");
+      }
+      if (idbKeyResult.success && record.useKey) {
+        key = idbKeyResult.result.data.value;
+      }
+      const result = await objectStore.put(record.data, key);
+      const dbResult = await objectStore.get(result);
+      await tx.done;
+      const msg = `Updated record with id ${result}`;
+      return this.getSuccessResult(msg, dbResult, record, "Record");
+    } catch (e) {
+      return this.getFailureResult(`Error updating record: ${e}`, record, "RecordQueryError");
+    }
+  }
+  async deleteRecord(query) {
+    try {
+      const { tx, objectStore, idbKeyResult } = this.getStoreQuery(query, "readwrite");
+      if (!objectStore.delete) {
+        return this.getFailureResult("delete method not available on object store", query, "RecordQueryError");
+      }
+      if (!idbKeyResult.success) {
+        return this.getFailureResult(`Error deleting record: ${idbKeyResult.message}`, query, "RecordQueryError");
+      }
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`Error deleting record: NoQuery is not a valid query`, query, "RecordQueryError");
+      }
+      await objectStore.delete(idbKeyResult.result.data.value);
+      await tx.done;
+      return this.getSuccessResult(`Deleted records from store ${query.storeName}`, undefined, query, "RecordDeleted");
+    } catch (e) {
+      return this.getFailureResult(`Error deleting record: ${e}`, query, "RecordQueryError");
+    }
+  }
+  async clearStore(record) {
+    try {
+      const { tx, objectStore } = this.getTransaction(record, "readwrite");
+      if (!objectStore.clear) {
+        return this.getFailureResult("Clear method not available on object store", record, "StoreQueryError");
+      }
+      await objectStore.clear();
+      await tx.done;
+      return this.getSuccessResult(`Store ${record.storeName} cleared`, undefined, record, "StoreCleared");
+    } catch (e) {
+      return this.getFailureResult(`Error clearing store ${record.storeName}: ${e}`, record, "StoreQueryError");
+    }
+  }
+  async openCursor(searchData, direction) {
+    try {
+      const queryPath = this.getQueryPath(searchData);
+      const { objectStore, tx, idbKeyResult, index } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const instance = this.getInstance(searchData.databaseName);
+      const executingCursor = this.getInstanceExecutingCursor(instance, searchData);
+      if (executingCursor) {
+        return this.getFailureResult(`Another cursor is already open`, searchData, "CursorFailure");
+      }
+      const query = idbKeyResult.result.data.value;
+      const queryObject = index ?? objectStore;
+      const rs = await queryObject.openCursor(query, direction);
+      await tx.done;
+      if (rs?.value) {
+        instance.executingCursors.push({ initialQuery: searchData, cursorPosition: 1, direction });
+        return this.getSuccessResult(`Cursor result ${queryPath}`, rs.value, searchData, "CursorRecord");
+      }
+      return this.getSuccessResult(`Cursor result ${queryPath}`, undefined, searchData, "CursorClosed");
+    } catch (e) {
+      return this.getFailureResult(`Error getting records ${e}`, searchData, "CursorFailure");
+    }
+  }
+  async advanceCursor(searchData) {
+    try {
+      const queryPath = this.getQueryPath(searchData);
+      const instance = this.getInstance(searchData.databaseName);
+      const executingCursor = this.getInstanceExecutingCursor(instance, searchData);
+      if (executingCursor) {
+        const { objectStore, tx, idbKeyResult, index } = this.getStoreQuery(executingCursor.initialQuery, "readonly");
+        if (!idbKeyResult.success) {
+          return idbKeyResult;
+        }
+        const query = idbKeyResult.result.data.value;
+        const queryObject = index ?? objectStore;
+        const rs = await queryObject.openCursor(query, executingCursor.direction);
+        const next = await rs?.advance(executingCursor.cursorPosition);
+        await tx.done;
+        if (!next || !next.value) {
+          instance.executingCursors.splice(instance.executingCursors.indexOf(executingCursor), 1);
+          return this.getSuccessResult(`No more records ${queryPath}`, undefined, searchData, "CursorClosed");
+        }
+        executingCursor.cursorPosition += 1;
+        return this.getSuccessResult(`Cursor record ${queryPath}`, next.value, searchData, "CursorRecord");
+      }
+      return this.getSuccessResult(`No cursor is open ${queryPath}`, undefined, searchData, "CursorNotOpen");
+    } catch (e) {
+      return this.getFailureResult(`Error getting records ${e}`, searchData, "CursorFailure");
+    }
+  }
+  async closeCursor(searchData) {
+    try {
+      const instance = this.getInstance(searchData.databaseName);
+      if (!instance) {
+        return this.getFailureResult(`Database ${searchData.databaseName} not found. Is it open?`, searchData, "InstanceNotFound");
+      }
+      const executingCursor = this.getInstanceExecutingCursor(instance, searchData);
+      if (!executingCursor) {
+        return this.getSuccessResult(`No cursor is open`, undefined, searchData, "CursorNotOpen");
+      }
+      instance.executingCursors.splice(instance.executingCursors.indexOf(executingCursor), 1);
+      return this.getSuccessResult(``, undefined, searchData, "CursorClosed");
+    } catch (e) {
+      return this.getFailureResult(`Error closing cursor: ${e}`, searchData, "CursorFailure");
+    }
+  }
+  async closeAllStoreCursors(searchData) {
+    try {
+      const instance = this.getInstance(searchData.databaseName);
+      if (!instance) {
+        return this.getFailureResult(`Database ${searchData.databaseName} not found. Is it open?`, searchData, "InstanceNotFound");
+      }
+      instance.executingCursors = instance.executingCursors.filter((c) => c.initialQuery.databaseName !== searchData.databaseName && c.initialQuery.storeName !== searchData.storeName);
+      return this.getSuccessResult(``, undefined, searchData, "CursorNoMoreRecords");
+    } catch (e) {
+      return this.getFailureResult(`Error closing cursor: ${e}`, searchData, "CursorFailure");
+    }
+  }
+  async closeAllCursors(searchData) {
+    try {
+      const instance = this.getInstance(searchData.databaseName);
+      if (!instance) {
+        return this.getFailureResult(`Database ${searchData.databaseName} not found. Is it open?`, searchData, "InstanceNotFound");
+      }
+      instance.executingCursors = [];
+      return this.getSuccessResult(``, undefined, { databaseName: searchData.databaseName, storeName: "" }, "CursorClosed");
+    } catch (e) {
+      return this.getFailureResult(`Error closing cursor: ${e}`, { databaseName: searchData.databaseName, storeName: "" }, "CursorFailure");
+    }
+  }
+  async iterateRecords(searchData, direction) {
+    try {
+      const queryPath = this.getQueryPath(searchData);
+      const { objectStore, tx, idbKeyResult, index } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const results = [];
+      const queryObject = index ?? objectStore;
+      const recordIterator = queryObject.iterate(idbKeyResult.result.data.value, direction);
+      for await (const cursor of recordIterator) {
+        results.push(cursor.value);
+      }
+      await tx.done;
+      return this.getSuccessResult(`${results.length} records retrieved ${queryPath}`, results, searchData, results.length > 0 ? "Record" : "RecordNotFound");
+    } catch (e) {
+      return this.getFailureResult(`Error getting records ${e}`, searchData, "StoreQueryError");
+    }
+  }
+  async getRecord(searchData) {
+    try {
+      const queryPath = this.getQueryPath(searchData);
+      const { objectStore, tx, idbKeyResult, index } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`NoQuery is not a valid query`, searchData, "RecordQueryError");
+      }
+      const queryObject = index ?? objectStore;
+      const results = await queryObject.get(idbKeyResult.result.data.value);
+      await tx.done;
+      return this.getSuccessResult(`${results ? "1" : "0"} record retrieved ${queryPath}`, results, searchData, results ? "Record" : "RecordNotFound");
+    } catch (e) {
+      return this.getFailureResult(`Error getting record: ${e}`, searchData, "StoreQueryError");
+    }
+  }
+  async getAllRecords(searchData, count) {
+    try {
+      const queryPath = this.getQueryPath(searchData);
+      const { objectStore, tx, idbKeyResult, index } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const queryObject = index ?? objectStore;
+      const results = await queryObject.getAll(idbKeyResult.result.data.value, count > 0 ? count : undefined);
+      await tx.done;
+      return this.getSuccessResult(`${results.length} records retrieved from ${queryPath}`, results, searchData, results.length > 0 ? "Record" : "RecordNotFound");
+    } catch (e) {
+      return this.getFailureResult(`Error getting records: ${e}`, searchData, "StoreQueryError");
+    }
+  }
+  async getAllKeys(searchData, count) {
+    try {
+      const queryPath = this.getQueryPath(searchData);
+      const { objectStore, tx, idbKeyResult, index } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      const queryObject = index ?? objectStore;
+      const results = await queryObject.getAllKeys(idbKeyResult.result.data.value, count > 0 ? count : undefined);
+      await tx.done;
+      return this.getSuccessResult(`${results.length} keys retrieved from ${queryPath}`, results, searchData, results.length > 0 ? "Record" : "RecordNotFound");
+    } catch (e) {
+      return this.getFailureResult(`Error getting keys: ${e}`, searchData, "StoreQueryError");
+    }
+  }
+  async getKey(searchData) {
+    try {
+      const queryPath = this.getQueryPath(searchData);
+      const { objectStore, tx, idbKeyResult, index } = this.getStoreQuery(searchData, "readonly");
+      if (!idbKeyResult.success) {
+        return idbKeyResult;
+      }
+      if (idbKeyResult.result.data.type === "NoQuery") {
+        return this.getFailureResult(`NoQuery is not a valid query`, searchData, "RecordQueryError");
+      }
+      const queryObject = index ?? objectStore;
+      const results = await queryObject.getKey(idbKeyResult.result.data.value);
+      await tx.done;
+      return this.getSuccessResult(`${results ? "1" : "0"} keys retrieved from ${queryPath}`, results, searchData, results ? "Record" : "RecordNotFound");
+    } catch (e) {
+      return this.getFailureResult(`Error getting keys: ${e}`, searchData, "StoreQueryError");
+    }
+  }
+  getIDBKey(incommingQuery) {
+    let result;
+    const query = incommingQuery.queryValue;
+    try {
+      switch (query.queryType) {
+        case "BoundQuery":
+          result = { type: "KeyRange", value: IDBKeyRange.bound(query.lower, query.upper, query.lowerOpen, query.upperOpen) };
+          break;
+        case "LowerBoundQuery":
+          result = { type: "KeyRange", value: IDBKeyRange.lowerBound(query.lowerBound, query.lowerOpen) };
+          break;
+        case "UpperBoundQuery":
+          result = { type: "KeyRange", value: IDBKeyRange.upperBound(query.upperBound, query.upperOpen) };
+          break;
+        case "OnlyQuery":
+          result = { type: "KeyRange", value: IDBKeyRange.only(query.value) };
+          break;
+        case "ValidKeyQuery":
+          result = { type: "ValidKey", value: query.value };
+          break;
+        case "NoQuery":
+          result = { type: "NoQuery", value: undefined };
+          break;
+        default:
+          return this.getFailureResult(`Invalid query type ${query.queryType}`, incommingQuery, "IDBKeyFailure");
+      }
+    } catch (e) {
+      return this.getFailureResult(`Failed to create key ${e}`, incommingQuery, "IDBKeyFailure");
+    }
+    return this.getSuccessResult("", result, incommingQuery, "IDBKeyCreated");
+  }
+  getStoreQuery(searchData, transactionMode) {
+    const { tx, objectStore } = this.getTransaction(searchData, transactionMode);
+    const idbKeyResult = this.getIDBKey(searchData);
+    const index = searchData.indexName ? objectStore.index(searchData.indexName) : undefined;
+    return { objectStore, tx, idbKeyResult, index };
+  }
+  getTransaction(searchData, mode) {
+    const db = this.getInstance(searchData.databaseName);
+    if (!db) {
+      throw new Error(`Database ${searchData.databaseName} not found. Is it open?`);
+    }
+    const tx = db.instance.transaction(searchData.storeName, mode);
+    const objectStore = tx.objectStore(searchData.storeName);
+    return { tx, objectStore };
+  }
+  removePrimaryKeyPropertyIfAutoIncrement(objectStore, data) {
+    if (!objectStore.autoIncrement || !objectStore.keyPath) {
+      return data;
+    }
+    if (!Array.isArray(objectStore.keyPath)) {
+      if (Object.hasOwn(data, objectStore.keyPath)) {
+        delete data[objectStore.keyPath];
+      }
+    }
+    return data;
+  }
+  upgradeDatabase(upgradeDB, dbStore, oldVersion, newVersion, transaction) {
+    const outcomes = [];
+    if (oldVersion < newVersion) {
+      for (var store of dbStore.stores) {
+        if (!upgradeDB.objectStoreNames.contains(store.name)) {
+          outcomes.push(...this.addNewStore(upgradeDB, store, oldVersion, newVersion));
+          continue;
+        }
+        const table = transaction.objectStore(store.name);
+        for (const indexSpec of store.indexes) {
+          if (table.indexNames.contains(indexSpec.name)) {
+            continue;
+          }
+          outcomes.push(this.createIndexForStore(indexSpec, table, oldVersion, newVersion));
+        }
+      }
+    }
+    return outcomes;
+  }
+  async verifySchema(upgradeDB, database) {
+    const result = [];
+    if (database.stores) {
+      for (var store of database.stores) {
+        const processingObject = { databaseName: database.name, storeName: store.name };
+        if (!upgradeDB.objectStoreNames.contains(store.name)) {
+          result.push(this.getFailureResult(`Store ${store.name} not found in database`, processingObject, "StoreNotFound"));
+          continue;
+        }
+        const tx = upgradeDB.transaction(store.name, "readonly");
+        const table = tx.objectStore(store.name);
+        for (const appIndex of store.indexes) {
+          if (!table.indexNames.contains(appIndex.name)) {
+            result.push(this.getFailureResult(`Index ${appIndex.name} not found in store ${store.name}`, processingObject, "IndexNotFound"));
+            continue;
+          }
+          const idx = table.index(appIndex.name);
+          if (Array.isArray(idx.keyPath)) {
+            for (const idxKey of idx.keyPath) {
+              if (!appIndex.keyPath.includes(idxKey)) {
+                result.push(this.getFailureResult(`Index ${appIndex.name} keyPath does not match. Expected: ${appIndex.keyPath}, Actual: ${idx.keyPath}`, processingObject, "IndexKeyPathMismatch"));
+              }
+            }
+          } else {
+            if (!appIndex.keyPath.includes(idx.keyPath)) {
+              result.push(this.getFailureResult(`Index ${appIndex.name} keyPath does not match. Expected: ${appIndex.keyPath}, Actual: ${idx.keyPath}`, processingObject, "IndexKeyPathMismatch"));
+            }
+          }
+        }
+      }
+    }
+    return result;
+  }
+  addNewStore(upgradeDB, store, oldVersion, newVersion) {
+    const storeOutcomes = [];
+    let primaryKey = store.primaryKey;
+    if (!primaryKey) {
+      primaryKey = { name: "id", keyPath: ["id"], auto: true, multiEntry: false, unique: true, keepAsArrayOnSingleValue: false };
+    }
+    const primaryKeyPath = primaryKey.keyPath.length == 1 ? primaryKey.keyPath[0] : primaryKey.keyPath;
+    try {
+      const newStore = upgradeDB.createObjectStore(store.name, { keyPath: primaryKeyPath, autoIncrement: primaryKey.auto });
+      const baseInfo = { databaseName: upgradeDB.name, storeName: store.name };
+      storeOutcomes.push(this.getSuccessResult(`Store ${store.name} created inside ${upgradeDB.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`, undefined, baseInfo, "StoreCreated"));
+      for (var index of store.indexes) {
+        storeOutcomes.push(this.createIndexForStore(index, newStore, oldVersion, newVersion));
+      }
+    } catch (e) {
+      storeOutcomes.push(this.getFailureResult(`Error creating store ${store.name}: ${e}`, { databaseName: upgradeDB.name, storeName: store.name }, "StoreCreationError"));
+    }
+    return storeOutcomes;
+  }
+  createIndexForStore(index, newStore, oldVersion, newVersion) {
+    let keyPath = index.keyPath;
+    if (index.keyPath.length === 1 && !index.keepAsArrayOnSingleValue) {
+      keyPath = index.keyPath[0];
+    }
+    if (index.multiEntry && index.keyPath.length > 1) {
+      return this.getFailureResult(`Index ${index.name} has multiEntry set to true but has multiple keyPaths. This is not supported.`, { databaseName: newStore.transaction.db.name, storeName: newStore.name }, "MultiEntryIndexWithMultipleKeyPaths");
+    }
+    if (index.multiEntry && index.keyPath.length === 1) {
+      keyPath = index.keyPath[0];
+    }
+    try {
+      newStore.createIndex(index.name, keyPath, { unique: index.unique, multiEntry: index.multiEntry });
+    } catch (e) {
+      return this.getFailureResult(`Error creating index ${index.name} for store ${newStore.name}: ${e}`, { databaseName: newStore.transaction.db.name, storeName: newStore.name }, "IndexCreationError");
+    }
+    const message = `Index ${index.name} created inside ${newStore.name} as it was missing when upgrading from v${oldVersion} to v${newVersion}`;
+    return this.getSuccessResult(message, undefined, { databaseName: "", storeName: newStore.name }, "IndexCreated");
+  }
+  getSuccessResult(successMessage, data, requestBase, type) {
+    const result = {
+      success: true,
+      result: {
+        data,
+        databaseName: requestBase.databaseName,
+        storeName: requestBase.storeName
+      },
+      message: successMessage,
+      type
+    };
+    if (this._sendNotifications) {
+      this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, result);
+      if (true) {
+        console.log(result);
+      }
+    }
+    return result;
+  }
+  getFailureResult(errorMessage, requestBase, type) {
+    const result = {
+      success: false,
+      result: {
+        data: undefined,
+        databaseName: requestBase.databaseName,
+        storeName: requestBase.storeName
+      },
+      message: errorMessage,
+      type
+    };
+    if (this._sendNotifications) {
+      this._dbManagerRef.invokeMethodAsync(RAISE_EVENT_METHOD, result);
+      if (true) {
+        console.log(result);
+      }
+    }
+    return result;
+  }
+  getInstance(dbName) {
+    return this.instances.find((i) => i.name.toLowerCase() === dbName.toLowerCase());
+  }
+  getInstanceExecutingCursor(instance, searchData) {
+    return instance.executingCursors.find((c) => c.initialQuery.databaseName === searchData.databaseName && c.initialQuery.storeName === searchData.storeName && c.initialQuery.indexName === searchData.indexName && JSON.stringify(c.initialQuery.queryValue) === JSON.stringify(searchData.queryValue));
+  }
+  getQueryPath(searchData) {
+    return `${searchData.databaseName}->${searchData.storeName}${searchData.indexName ? `->${searchData.indexName}` : ``}`;
+  }
+  getStoreNames(list) {
+    const names = [];
+    for (const storeName of list) {
+      names.push(storeName);
+    }
+    return names;
+  }
+}
+
+// client/app.ts
+var IDBManager;
+var _dbManagerRef;
+function initIndexedDbManager(config) {
+  if (IDBManager) {
+    return;
+  }
+  IDBManager = new IndexedDbManager(config);
+  _dbManagerRef = config.dotNetReference;
+  console.log("IndexedDbManager initialized");
+}
+export {
+  initIndexedDbManager,
+  IDBManager
+};
+
+//# debugId=AF6753D81AF4BECD64756E2164756E21
 //# sourceMappingURL=client.js.map

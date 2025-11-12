@@ -12,7 +12,7 @@
         <MudStack>
             <MudText>Simple Query</MudText>
             <MudPaper Outlined="true" Class="pa-1">
-                <MudRadio Value="@("Simple")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                <MudRadio Value="@("Simple")" Color="Color.Primary" Dense="true" LabelPlacement="Placement.Bottom" Class="ml-0">
                     <MudStack>
                         <MudTextField Label="Search String" Variant="Variant.Outlined" Value="SimpleSearchString" T="string" ValueChanged="SimpleSearchStringChanged" />
                     </MudStack>
@@ -22,7 +22,7 @@
         <MudStack>
             <MudText>Bound Query</MudText>
             <MudPaper Outlined="true" Class="pa-1">
-                <MudRadio Value="@("Bound")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                <MudRadio Value="@("Bound")" Color="Color.Primary" Dense="true" LabelPlacement="Placement.Bottom" Class="ml-0">
                     <MudStack>
                         <MudTextField Label="Lower" Variant="Variant.Outlined" Value="BoundLowerString" T="string" ValueChanged="BoundLowerSearchStringChanged" />
                         <MudTextField Label="Upper" Variant="Variant.Outlined" Value="BoundUpperString" T="string" ValueChanged="BoundUpperSearchStringChanged" />
@@ -35,7 +35,7 @@
         <MudStack>
             <MudText>Lower Bound Query</MudText>
             <MudPaper Outlined="true" Class="pa-1">
-                <MudRadio Value="@("Lower")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                <MudRadio Value="@("Lower")" Color="Color.Primary" Dense="true" LabelPlacement="Placement.Bottom" Class="ml-0">
                     <MudStack>
                         <MudTextField Label="Lower" Variant="Variant.Outlined" Value="LowerSearchString" T="string" ValueChanged="LowerSearchStringChanged" />
                         <MudSwitch Color="Color.Primary" Value="LowerExcludeLower" T="bool" ValueChanged="LowerExcludeChanged">Exclude Lower</MudSwitch>
@@ -46,7 +46,7 @@
         <MudStack>
             <MudText>Upper Bound Query</MudText>
             <MudPaper Outlined="true" Class="pa-1">
-                <MudRadio Value="@("Upper")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                <MudRadio Value="@("Upper")" Color="Color.Primary" Dense="true" LabelPlacement="Placement.Bottom" Class="ml-0">
                     <MudStack>
                         <MudTextField Label="Upper" Variant="Variant.Outlined" Value="UpperSearchString" T="string" ValueChanged="UpperSearchStringChanged" />
                         <MudSwitch Color="Color.Primary" Value="UpperExcludeUpper" T="bool" ValueChanged="UpperExcludeChanged">Exclude Upper</MudSwitch>
@@ -57,7 +57,7 @@
         <MudStack>
             <MudText>Only Query</MudText>
             <MudPaper Outlined="true" Class="pa-1">
-                <MudRadio Value="@("Only")" Color="Color.Primary" Dense="true" Placement="Placement.Bottom" Class="ml-0">
+                <MudRadio Value="@("Only")" Color="Color.Primary" Dense="true" LabelPlacement="Placement.Bottom" Class="ml-0">
                     <MudStack>
                         <MudTextField Label="Search String" Variant="Variant.Outlined" Value="OnlyQuerySearchString" T="string" ValueChanged="OnlySearchStringChanged" />
                     </MudStack>

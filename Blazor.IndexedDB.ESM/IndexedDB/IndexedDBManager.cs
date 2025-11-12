@@ -6,6 +6,7 @@ using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Blazor.IndexedDB.ESM
@@ -15,10 +16,15 @@ namespace Blazor.IndexedDB.ESM
     /// </summary>
     public class IndexedDBManager
     {
+
+        private readonly string _assemblyName;
         private readonly IJSRuntime _jsRuntime;
         private readonly DotNetObjectReference<IndexedDBManager> _dbManagerRef;
         private IJSObjectReference? _jsModule;
+        private IJSInProcessObjectReference? _jsInProcessModule; // in-process (WebAssembly) module reference
+        private readonly bool _isInProcessRuntime; // flag for WebAssembly runtime
         private IndexedDBJSConfig _jsConfig;
+        private readonly SemaphoreSlim _initLock = new(1, 1);
 
         /// <summary>
         /// A notification event that is raised when an action is completed
@@ -33,6 +39,8 @@ namespace Blazor.IndexedDB.ESM
         public IndexedDBManager(IndexedDBManagerConfig managerConfig, IJSRuntime jsRuntime)
         {
             _jsRuntime = jsRuntime;
+            _isInProcessRuntime = jsRuntime is IJSInProcessRuntime; // detect WebAssembly runtime
+            _assemblyName = GetType().Assembly.GetName().Name ?? "UnknownAssemblyName";
             _dbManagerRef = DotNetObjectReference.Create(this);
             _jsConfig = new IndexedDBJSConfig
             {
@@ -47,15 +55,8 @@ namespace Blazor.IndexedDB.ESM
         /// and create the stores defined in DbStore.
         /// </summary>
         /// <returns></returns>
-        public Task<List<IndexedDBActionResult<string?>>> OpenDb(string dbName)
-        {
-            return OpenDb(ManagerConfig.Databases.First(s => s.Name == dbName));
-        }
-        public async Task<List<IndexedDBActionResult<string?>>> OpenDb(IndexedDBDatabase db)
-        {
-            return await CallJavaScriptReturnMany<string?>(IndexedDBJSModuleMethod.OpenDb, db);
-
-        }
+        public Task<List<IndexedDBActionResult<string?>>> OpenDb(string dbName) => OpenDb(ManagerConfig.Databases.First(s => s.Name == dbName));
+        public async Task<List<IndexedDBActionResult<string?>>> OpenDb(IndexedDBDatabase db) => await CallJavaScriptReturnMany<string?>(IndexedDBJSModuleMethod.OpenDb, db);
 
         /// <summary>
         /// Deletes the database corresponding to the dbName passed in
@@ -170,7 +171,9 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<TResult>> OpenCursor<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection? direction = null)
         {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.OpenCursor, searchQuery, direction);
+            return direction == null ? 
+                await CallJavaScript<TResult>(IndexedDBJSModuleMethod.OpenCursor, searchQuery) :
+                await CallJavaScript<TResult>(IndexedDBJSModuleMethod.OpenCursor, searchQuery, direction);
         }
 
         /// <summary>
@@ -248,7 +251,9 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<TResult>> IterateRecords<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection? direction = null)
         {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecords, searchQuery, direction);
+            return direction == null ? 
+                await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecords, searchQuery) : 
+                await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecords, searchQuery, direction);
         }
 
 
@@ -303,26 +308,66 @@ namespace Blazor.IndexedDB.ESM
         private async Task EnsureModule()
         {
             if (_jsModule != null) return;
-            var assemblyName = GetType().Assembly.GetName().Name;
-            _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", $"./_content/{assemblyName}/client.js");
-            await _jsModule.InvokeVoidAsync($"{IndexedDBJSModuleMethod.InitIndexedDBManager}", _jsConfig);
+            await _initLock.WaitAsync();
+            try
+            {
+                if (_jsModule != null) return; // double-check after lock
+                var module = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", $"./_content/{_assemblyName}/client.js");
+                await module.InvokeVoidAsync($"{IndexedDBJSModuleMethod.InitIndexedDBManager}", _jsConfig);
+                _jsModule = module;
+                if (_isInProcessRuntime && module is IJSInProcessObjectReference inProcess)
+                {
+                    _jsInProcessModule = inProcess; // cache synchronous module for faster calls
+                }
+            }
+            finally
+            {
+                _initLock.Release();
+            }
+        }
+
+        // Shared JS invoke core used by both CallJavaScript and CallJavaScriptReturnMany to avoid duplication
+        private async Task<T> CallJavaScriptCore<T>(IndexedDBJSModuleMethod functionName, params object[] args)
+        {
+            await EnsureModule();
+            try
+            {
+                if (_jsInProcessModule != null)
+                {
+                    // fast in-process path (Blazor WebAssembly)
+                    return _jsInProcessModule.Invoke<T>($"IDBManager.{functionName}", args);
+                }
+                return await _jsModule!.InvokeAsync<T>($"IDBManager.{functionName}", args);
+            }
+            catch (JSDisconnectedException)
+            {
+                _jsModule = null; _jsInProcessModule = null;
+                await EnsureModule();
+                if (_jsInProcessModule != null)
+                {
+                    return _jsInProcessModule.Invoke<T>($"IDBManager.{functionName}", args);
+                }
+                return await _jsModule!.InvokeAsync<T>($"IDBManager.{functionName}", args);
+            }
+            catch (ObjectDisposedException)
+            {
+                _jsModule = null; _jsInProcessModule = null;
+                await EnsureModule();
+                if (_jsInProcessModule != null)
+                {
+                    return _jsInProcessModule.Invoke<T>($"IDBManager.{functionName}", args);
+                }
+                return await _jsModule!.InvokeAsync<T>($"IDBManager.{functionName}", args);
+            }
         }
 
         private async Task<IndexedDBActionResult<TResult>> CallJavaScript<TResult>(IndexedDBJSModuleMethod functionName, params object[] args)
         {
-            await EnsureModule();
-            return await _jsModule!.InvokeAsync<IndexedDBActionResult<TResult>>($"IDBManager.{functionName}", args);
+            return await CallJavaScriptCore<IndexedDBActionResult<TResult>>(functionName, args);
         }
         private async Task<List<IndexedDBActionResult<TResult>>> CallJavaScriptReturnMany<TResult>(IndexedDBJSModuleMethod functionName, params object[] args)
         {
-            await EnsureModule();
-            return await _jsModule!.InvokeAsync<List<IndexedDBActionResult<TResult>>>($"IDBManager.{functionName}", args);
-        }
-
-        private async Task CallJavaScriptVoid(IndexedDBJSModuleMethod functionName, params object[] args)
-        {
-            await EnsureModule();
-            await _jsModule!.InvokeVoidAsync($"IDBManager.{functionName}", args);
+            return await CallJavaScriptCore<List<IndexedDBActionResult<TResult>>>(functionName, args);
         }
         #endregion
 

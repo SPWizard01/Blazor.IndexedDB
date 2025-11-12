@@ -2,6 +2,7 @@
 using Blazor.IndexedDB.ESM.Models.JS;
 using Blazor.IndexedDB.ESM.Models.Query;
 using Blazor.IndexedDB.ESM.Models.Record;
+using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
@@ -23,8 +24,9 @@ namespace Blazor.IndexedDB.ESM
         private IJSObjectReference? _jsModule;
         private IJSInProcessObjectReference? _jsInProcessModule; // in-process (WebAssembly) module reference
         private readonly bool _isInProcessRuntime; // flag for WebAssembly runtime
-        private IndexedDBJSConfig _jsConfig;
+        private readonly IndexedDBJSConfig _jsConfig;
         private readonly SemaphoreSlim _initLock = new(1, 1);
+        private readonly ILogger _logger;
 
         /// <summary>
         /// A notification event that is raised when an action is completed
@@ -36,7 +38,7 @@ namespace Blazor.IndexedDB.ESM
         /// </summary>
         public IndexedDBManagerConfig ManagerConfig { get; }
 
-        public IndexedDBManager(IndexedDBManagerConfig managerConfig, IJSRuntime jsRuntime)
+        public IndexedDBManager(IndexedDBManagerConfig managerConfig, IJSRuntime jsRuntime, ILogger<IndexedDBManager> logger)
         {
             _jsRuntime = jsRuntime;
             _isInProcessRuntime = jsRuntime is IJSInProcessRuntime; // detect WebAssembly runtime
@@ -49,6 +51,7 @@ namespace Blazor.IndexedDB.ESM
                 SendNotificationsFromJS = managerConfig.Config.SendNotificationsFromJS
             };
             ManagerConfig = managerConfig;
+            _logger = logger;
         }
         /// <summary>
         /// Opens the IndexedDB defined in the DbStore. Under the covers will create the database if it does not exist
@@ -56,7 +59,7 @@ namespace Blazor.IndexedDB.ESM
         /// </summary>
         /// <returns></returns>
         public Task<List<IndexedDBActionResult<string?>>> OpenDb(string dbName) => OpenDb(ManagerConfig.Databases.First(s => s.Name == dbName));
-        public async Task<List<IndexedDBActionResult<string?>>> OpenDb(IndexedDBDatabase db) => await CallJavaScriptReturnMany<string?>(IndexedDBJSModuleMethod.OpenDb, db);
+        public async Task<List<IndexedDBActionResult<string?>>> OpenDb(IndexedDBDatabase db) => await CallJavaScriptReturnMany<string?>(IndexedDBJSModuleMethods.OpenDb, db);
 
         /// <summary>
         /// Deletes the database corresponding to the dbName passed in
@@ -65,13 +68,13 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<string?>> DeleteDb(IndexedDBDatabase db)
         {
-            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.DeleteDb, db.Name);
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethods.DeleteDb, db.Name);
         }
 
         //TODO: Refactor
         public async Task GetDatabaseInfo(IndexedDBDatabase db)
         {
-            var result = await CallJavaScript<DBInformation>(IndexedDBJSModuleMethod.GetDatabaseInfo, db.Name);
+            var result = await CallJavaScript<DBInformation>(IndexedDBJSModuleMethods.GetDatabaseInfo, db.Name);
 
             if (result.Result?.Data?.Version > db.Version)
             {
@@ -105,7 +108,7 @@ namespace Blazor.IndexedDB.ESM
             db.Stores.Add(storeSchema);
             db.Version += 1;
 
-            var result = await CallJavaScript<string>(IndexedDBJSModuleMethod.OpenDb, db.Name);
+            var result = await CallJavaScript<string>(IndexedDBJSModuleMethods.OpenDb, db.Name);
 
             //RaiseNotification(IndexDBActionOutcome.TableCreated, $"new store {storeSchema.Name} added");
         }
@@ -119,7 +122,7 @@ namespace Blazor.IndexedDB.ESM
 
         public async Task<IndexedDBActionResult<T>> AddRecord<T>(IndexedDBRecordAction<T> recordToAdd)
         {
-            return await CallJavaScript<T>(IndexedDBJSModuleMethod.AddRecord, recordToAdd);
+            return await CallJavaScript<T>(IndexedDBJSModuleMethods.AddRecord, recordToAdd);
         }
 
         /// <summary>
@@ -130,7 +133,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<T>> UpdateRecord<T>(IndexedDBRecordAction<T> recordToUpdate)
         {
-            return await CallJavaScript<T>(IndexedDBJSModuleMethod.UpdateRecord, recordToUpdate);
+            return await CallJavaScript<T>(IndexedDBJSModuleMethods.UpdateRecord, recordToUpdate);
 
         }
 
@@ -143,7 +146,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<string?>> DeleteRecord(IndexedDBQuery query)
         {
-            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.DeleteRecord, query);
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethods.DeleteRecord, query);
         }
 
 
@@ -156,7 +159,7 @@ namespace Blazor.IndexedDB.ESM
         public async Task<IndexedDBActionResult<string?>> ClearStore(IndexedDBObjectBase target)
         {
 
-            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.ClearStore, target);
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethods.ClearStore, target);
 
         }
 
@@ -171,9 +174,9 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<TResult>> OpenCursor<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection? direction = null)
         {
-            return direction == null ? 
-                await CallJavaScript<TResult>(IndexedDBJSModuleMethod.OpenCursor, searchQuery) :
-                await CallJavaScript<TResult>(IndexedDBJSModuleMethod.OpenCursor, searchQuery, direction);
+            return direction == null ?
+                await CallJavaScript<TResult>(IndexedDBJSModuleMethods.OpenCursor, searchQuery) :
+                await CallJavaScript<TResult>(IndexedDBJSModuleMethods.OpenCursor, searchQuery, direction);
         }
 
         /// <summary>
@@ -184,7 +187,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<TResult>> AdvanceCursor<TResult>(IndexedDBQuery searchQuery)
         {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.AdvanceCursor, searchQuery);
+            return await CallJavaScript<TResult>(IndexedDBJSModuleMethods.AdvanceCursor, searchQuery);
         }
 
         /// <summary>
@@ -198,7 +201,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<string?>> CloseCursor(IndexedDBQuery searchQuery)
         {
-            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseCursor, searchQuery);
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethods.CloseCursor, searchQuery);
         }
 
         /// <summary>
@@ -212,7 +215,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<string?>> CloseAllStoreCursors(IndexedDBObjectBase searchQuery)
         {
-            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseAllStoreCursors, searchQuery);
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethods.CloseAllStoreCursors, searchQuery);
         }
 
         /// <summary>
@@ -226,7 +229,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<string?>> CloseAllCursors(IndexedDBObjectBase searchQuery)
         {
-            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseAllCursors, searchQuery);
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethods.CloseAllCursors, searchQuery);
         }
         /// <summary>
         /// Closes all cursors opened by <see cref="OpenCursor"/> for a given database
@@ -239,7 +242,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<string?>> CloseAllCursors(string databaseName)
         {
-            return await CallJavaScript<string?>(IndexedDBJSModuleMethod.CloseAllCursors, new IndexedDBObjectBase() { DatabaseName = databaseName, StoreName = "" });
+            return await CallJavaScript<string?>(IndexedDBJSModuleMethods.CloseAllCursors, new IndexedDBObjectBase() { DatabaseName = databaseName, StoreName = "" });
         }
 
 
@@ -251,9 +254,9 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<TResult>> IterateRecords<TResult>(IndexedDBQuery searchQuery, IndexedDBDirection? direction = null)
         {
-            return direction == null ? 
-                await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecords, searchQuery) : 
-                await CallJavaScript<TResult>(IndexedDBJSModuleMethod.IterateRecords, searchQuery, direction);
+            return direction == null ?
+                await CallJavaScript<TResult>(IndexedDBJSModuleMethods.IterateRecords, searchQuery) :
+                await CallJavaScript<TResult>(IndexedDBJSModuleMethods.IterateRecords, searchQuery, direction);
         }
 
 
@@ -264,7 +267,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<TResult>> GetRecord<TResult>(IndexedDBQuery searchQuery)
         {
-            return await CallJavaScript<TResult>(IndexedDBJSModuleMethod.GetRecord, searchQuery);
+            return await CallJavaScript<TResult>(IndexedDBJSModuleMethods.GetRecord, searchQuery);
         }
 
         /// <summary>
@@ -276,7 +279,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<List<TResult>>> GetAllRecords<TResult>(IndexedDBQuery searchQuery, int count = -1)
         {
-            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethod.GetAllRecords, searchQuery, count);
+            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethods.GetAllRecords, searchQuery, count);
         }
 
         /// <summary>
@@ -288,7 +291,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<List<TResult>>> GetAllKeys<TResult>(IndexedDBQuery searchQuery, int count = -1)
         {
-            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethod.GetAllKeys, searchQuery, count);
+            return await CallJavaScript<List<TResult>>(IndexedDBJSModuleMethods.GetAllKeys, searchQuery, count);
         }
 
         /// <summary>
@@ -299,7 +302,7 @@ namespace Blazor.IndexedDB.ESM
         /// <returns></returns>
         public async Task<IndexedDBActionResult<IList<TResult>>> GetKey<TResult>(IndexedDBQuery searchQuery)
         {
-            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethod.GetKey, searchQuery);
+            return await CallJavaScript<IList<TResult>>(IndexedDBJSModuleMethods.GetKey, searchQuery);
         }
         #endregion
 
@@ -313,7 +316,7 @@ namespace Blazor.IndexedDB.ESM
             {
                 if (_jsModule != null) return; // double-check after lock
                 var module = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", $"./_content/{_assemblyName}/client.js");
-                await module.InvokeVoidAsync($"{IndexedDBJSModuleMethod.InitIndexedDBManager}", _jsConfig);
+                await module.InvokeVoidAsync($"{IndexedDBJSModuleMethods.InitIndexedDBManager}", _jsConfig);
                 _jsModule = module;
                 if (_isInProcessRuntime && module is IJSInProcessObjectReference inProcess)
                 {
@@ -327,7 +330,7 @@ namespace Blazor.IndexedDB.ESM
         }
 
         // Shared JS invoke core used by both CallJavaScript and CallJavaScriptReturnMany to avoid duplication
-        private async Task<T> CallJavaScriptCore<T>(IndexedDBJSModuleMethod functionName, params object[] args)
+        private async Task<T> CallJavaScriptCore<T>(IndexedDBJSModuleMethod jsModuleMethod, params object[] args)
         {
             await EnsureModule();
             try
@@ -335,9 +338,9 @@ namespace Blazor.IndexedDB.ESM
                 if (_jsInProcessModule != null)
                 {
                     // fast in-process path (Blazor WebAssembly)
-                    return _jsInProcessModule.Invoke<T>($"IDBManager.{functionName}", args);
+                    return _jsInProcessModule.Invoke<T>(jsModuleMethod.QualifiedName, args);
                 }
-                return await _jsModule!.InvokeAsync<T>($"IDBManager.{functionName}", args);
+                return await _jsModule!.InvokeAsync<T>(jsModuleMethod.QualifiedName, args);
             }
             catch (JSDisconnectedException)
             {
@@ -345,9 +348,9 @@ namespace Blazor.IndexedDB.ESM
                 await EnsureModule();
                 if (_jsInProcessModule != null)
                 {
-                    return _jsInProcessModule.Invoke<T>($"IDBManager.{functionName}", args);
+                    return _jsInProcessModule.Invoke<T>(jsModuleMethod.QualifiedName, args);
                 }
-                return await _jsModule!.InvokeAsync<T>($"IDBManager.{functionName}", args);
+                return await _jsModule!.InvokeAsync<T>(jsModuleMethod.QualifiedName, args);
             }
             catch (ObjectDisposedException)
             {
@@ -355,19 +358,19 @@ namespace Blazor.IndexedDB.ESM
                 await EnsureModule();
                 if (_jsInProcessModule != null)
                 {
-                    return _jsInProcessModule.Invoke<T>($"IDBManager.{functionName}", args);
+                    return _jsInProcessModule.Invoke<T>(jsModuleMethod.QualifiedName, args);
                 }
-                return await _jsModule!.InvokeAsync<T>($"IDBManager.{functionName}", args);
+                return await _jsModule!.InvokeAsync<T>(jsModuleMethod.QualifiedName, args);
             }
         }
 
-        private async Task<IndexedDBActionResult<TResult>> CallJavaScript<TResult>(IndexedDBJSModuleMethod functionName, params object[] args)
+        private async Task<IndexedDBActionResult<TResult>> CallJavaScript<TResult>(IndexedDBJSModuleMethod jsModuleMethod, params object[] args)
         {
-            return await CallJavaScriptCore<IndexedDBActionResult<TResult>>(functionName, args);
+            return await CallJavaScriptCore<IndexedDBActionResult<TResult>>(jsModuleMethod, args);
         }
-        private async Task<List<IndexedDBActionResult<TResult>>> CallJavaScriptReturnMany<TResult>(IndexedDBJSModuleMethod functionName, params object[] args)
+        private async Task<List<IndexedDBActionResult<TResult>>> CallJavaScriptReturnMany<TResult>(IndexedDBJSModuleMethod jsModuleMethod, params object[] args)
         {
-            return await CallJavaScriptCore<List<IndexedDBActionResult<TResult>>>(functionName, args);
+            return await CallJavaScriptCore<List<IndexedDBActionResult<TResult>>>(jsModuleMethod, args);
         }
         #endregion
 
@@ -381,9 +384,10 @@ namespace Blazor.IndexedDB.ESM
         [JSInvokable]
         public void RaiseNotificationFromJS(IndexedDBActionResult<object> result)
         {
-#if DEBUG
-            Console.WriteLine($"JS Outcome: {result.Type}, Message: {result.Message}");
-#endif
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("JS Outcome: {OutcomeType}, Message: {Message}", result.Type, result.Message);
+            }
             ActionCompleted?.Invoke(this, result);
         }
     }

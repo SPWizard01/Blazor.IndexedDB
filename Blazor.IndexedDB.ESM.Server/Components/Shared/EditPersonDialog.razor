@@ -18,7 +18,7 @@
 </MudDialog>
 @code {
     [CascadingParameter]
-    public required IDialogReference MudDialog { get; set; }
+    public required IMudDialogInstance MudDialog { get; set; }
 
     [Parameter]
     public required IndexedDBRecord<Person> Person { get; set; }

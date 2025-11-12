@@ -1,11 +1,13 @@
 ﻿using Bogus;
+using System.Text.Json.Serialization;
 
 namespace Blazor.IndexedDB.ESM.Server.Models
 {
     public class Person
     {
         private static Faker fkr = new();
-        public long? Id { get; set; }
+        [JsonPropertyName("id")]
+        public int? Id { get; set; }
         public string FirstName { get; set; } = fkr.Name.FirstName();
         public string LastName { get; set; } = fkr.Name.LastName();
         public long Ssn { get; set; } = fkr.Random.Long(1123456789);

@@ -1,42 +1,32 @@
-﻿namespace Blazor.IndexedDB.ESM
+﻿using System;
+
+namespace Blazor.IndexedDB.ESM
 {
 
     /// <summary>
-    /// Constants defining the JavaScript functions that can be called.
+    /// Represents a single JavaScript method that can be called in the IndexedDB module.
     /// </summary>
-    public class IndexedDBJSModuleMethod
+    public sealed class IndexedDBJSModuleMethod : IEquatable<IndexedDBJSModuleMethod>
     {
-        private IndexedDBJSModuleMethod(string value) { Value = value; }
+        internal IndexedDBJSModuleMethod(string value) { Value = value; }
 
-        public string Value { get; private set; }
-        public static IndexedDBJSModuleMethod InitIndexedDBManager { get; } = new("initIndexedDbManager");
-        public static IndexedDBJSModuleMethod CreateDb { get; } = new("createDb");
-        public static IndexedDBJSModuleMethod DeleteDb { get; } = new("deleteDb");
-        public static IndexedDBJSModuleMethod AddRecord { get; } = new("addRecord");
-        public static IndexedDBJSModuleMethod DeleteRecord { get; } = new("deleteRecord");
-        public static IndexedDBJSModuleMethod UpdateRecord { get; } = new("updateRecord");
+        public string Value { get; }
 
-        public static IndexedDBJSModuleMethod OpenCursor { get; } = new("openCursor");
-        public static IndexedDBJSModuleMethod AdvanceCursor { get; } = new("advanceCursor");
-        public static IndexedDBJSModuleMethod CloseCursor { get; } = new("closeCursor");
-        public static IndexedDBJSModuleMethod CloseAllStoreCursors { get; } = new("closeAllStoreCursors");
-        public static IndexedDBJSModuleMethod CloseAllCursors { get; } = new("closeAllCursors");
-        public static IndexedDBJSModuleMethod IterateRecords { get; } = new("iterateRecords");
-        public static IndexedDBJSModuleMethod GetRecord { get; } = new("getRecord");
-        public static IndexedDBJSModuleMethod GetAllRecords { get; } = new("getAllRecords");
-        public static IndexedDBJSModuleMethod GetAllKeys { get; } = new("getAllKeys");
-        public static IndexedDBJSModuleMethod GetKey { get; } = new("getKey");
+        /// <summary>
+        /// Fully qualified JS method name with the IDBManager prefix.
+        /// </summary>
+        public string QualifiedName => $"IDBManager.{Value}";
 
+        public override string ToString() => Value;
 
+        // Equality members to allow comparisons and dictionary/set usage
+        public bool Equals(IndexedDBJSModuleMethod? other) => other is not null && (ReferenceEquals(this, other) || Value == other.Value);
+        public override bool Equals(object? obj) => obj is IndexedDBJSModuleMethod other && Equals(other);
+        public override int GetHashCode() => Value.GetHashCode(StringComparison.Ordinal);
+        public static bool operator ==(IndexedDBJSModuleMethod? left, IndexedDBJSModuleMethod? right) => Equals(left, right);
+        public static bool operator !=(IndexedDBJSModuleMethod? left, IndexedDBJSModuleMethod? right) => !Equals(left, right);
 
-        public static IndexedDBJSModuleMethod GetRecords { get; } = new("getRecords");
-        public static IndexedDBJSModuleMethod OpenDb { get; } = new("openDb");
-        public static IndexedDBJSModuleMethod ClearStore { get; } = new("clearStore");
-        public static IndexedDBJSModuleMethod GetDatabaseInfo { get; } = new("getDatabaseInfo");
-
-        public override string ToString()
-        {
-            return Value;
-        }
+        // Convenience conversion to string
+        public static implicit operator string(IndexedDBJSModuleMethod method) => method.Value;
     }
 }

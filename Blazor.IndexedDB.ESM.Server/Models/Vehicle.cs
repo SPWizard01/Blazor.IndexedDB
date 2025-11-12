@@ -1,4 +1,5 @@
 ﻿using Bogus;
+using System.Text.Json.Serialization;
 
 namespace Blazor.IndexedDB.ESM.Server.Models
 {
@@ -6,6 +7,7 @@ namespace Blazor.IndexedDB.ESM.Server.Models
     {
         private static Faker fkr = new();
 
+        [JsonPropertyName("id")]
         public int? Id { get; set; }
         public string Model { get; set; } = fkr.Vehicle.Model();
         public string Make { get; set; } = fkr.Vehicle.Manufacturer();
